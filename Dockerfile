@@ -1,10 +1,9 @@
-# Dockerfile
-FROM openjdk:17-jdk-slim
+# Dockerfile - Version avec Eclipse Temurin
+FROM eclipse-temurin:17-jdk-alpine
 
-# Définir le répertoire de travail
 WORKDIR /app
 
-# Copier le fichier Maven wrapper
+# Copier les fichiers du projet
 COPY .mvn .mvn
 COPY mvnw .
 COPY pom.xml .
