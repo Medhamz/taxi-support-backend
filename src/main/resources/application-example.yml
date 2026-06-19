@@ -1,0 +1,76 @@
+# application-example.yml - À copier en application.yml pour le développement
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/abdiltaxi}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
+
+  web:
+    resources:
+      static-locations: classpath:/static/
+      add-mappings: true
+
+server:
+  port: ${PORT:8082}
+  servlet:
+    context-path: /api/support
+
+logging:
+  level:
+    com.abdil.support: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+
+storage:
+  voice: ${STORAGE_VOICE_PATH:/tmp/voice}
+  attachments: ${STORAGE_ATTACHMENTS_PATH:/tmp/attachments}
+
+notification:
+  email:
+    enabled: ${NOTIFICATION_EMAIL_ENABLED:true}
+    from: ${NOTIFICATION_EMAIL_FROM:support@taxi-app.com}
+  push:
+    enabled: ${NOTIFICATION_PUSH_ENABLED:true}
+
+support:
+  max-tickets-per-agent: ${SUPPORT_MAX_TICKETS:5}
+  auto-assign: ${SUPPORT_AUTO_ASSIGN:true}
+  auto-close-days: ${SUPPORT_AUTO_CLOSE_DAYS:7}
+
+api:
+  main:
+    url: ${MAIN_API_URL:https://abdil-taxi-backend.onrender.com/api}

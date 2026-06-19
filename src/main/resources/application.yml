@@ -1,0 +1,109 @@
+spring:
+  datasource:
+    # ✅ Utilisation de l'URL externe de Render
+    url: ${DATABASE_URL:jdbc:postgresql://dpg-d8naeg3tqb8s73cv0vbg-a.frankfurt-postgres.render.com/abdiltaxi}
+    username: ${DATABASE_USERNAME:abdil_user}
+    password: ${DATABASE_PASSWORD:yKYugkBFwU2Z3sIa38somtDYVYn48Yte}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate  # ⚠️ Mettre 'validate' pour ne pas modifier les tables existantes
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    show-sql: false
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  # ✅ AJOUT : Configuration Thymeleaf
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false  # Désactiver le cache en développement
+    servlet:
+      content-type: text/html
+
+  # ✅ AJOUT : Configuration des ressources statiques
+  web:
+    resources:
+      static-locations:
+        - classpath:/static/
+        - classpath:/public/
+        - classpath:/resources/
+        - classpath:/META-INF/resources/
+      add-mappings: true
+    # Configurer les ressources statiques avec cache
+    cache:
+      period: 3600
+
+  # ✅ AJOUT : Configuration pour les pages d'erreur
+  mvc:
+    throw-exception-if-no-handler-found: false
+    static-path-pattern: /**
+
+server:
+  port: ${PORT:8082}
+  servlet:
+    context-path: /api/support
+  # ✅ AJOUT : Configuration des erreurs
+  error:
+    whitelabel:
+      enabled: false  # Désactiver la page d'erreur par défaut de Spring
+
+logging:
+  level:
+    com.abdil.support: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.thymeleaf: DEBUG  # Ajout pour Thymeleaf
+
+# Configuration du stockage
+storage:
+  voice: ${STORAGE_VOICE_PATH:/tmp/voice}
+  attachments: ${STORAGE_ATTACHMENTS_PATH:/tmp/attachments}
+
+# Notifications
+notification:
+  email:
+    enabled: ${NOTIFICATION_EMAIL_ENABLED:true}
+    from: ${NOTIFICATION_EMAIL_FROM:support@taxi-app.com}
+  push:
+    enabled: ${NOTIFICATION_PUSH_ENABLED:true}
+
+# Support
+support:
+  max-tickets-per-agent: ${SUPPORT_MAX_TICKETS:5}
+  auto-assign: ${SUPPORT_AUTO_ASSIGN:true}
+  auto-close-days: ${SUPPORT_AUTO_CLOSE_DAYS:7}
+
+# URL du backend principal
+api:
+  main:
+    url: ${MAIN_API_URL:https://abdil-taxi-backend.onrender.com/api}

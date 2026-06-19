@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Support - Taxi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0e27; color: #fff; font-family: 'Segoe UI', sans-serif; }
+        .sidebar {
+            background: #141833;
+            min-height: 100vh;
+            border-right: 1px solid rgba(255,255,255,0.05);
+            padding: 20px;
+            position: fixed;
+            width: 250px;
+        }
+        .sidebar .logo { text-align: center; margin-bottom: 30px; }
+        .sidebar .logo h4 { background: linear-gradient(135deg, #6C63FF, #00D4FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .sidebar .nav-link {
+            color: #a0aec0;
+            padding: 12px 15px;
+            border-radius: 10px;
+            margin: 4px 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: rgba(108, 99, 255, 0.15);
+            color: #6C63FF;
+        }
+        .sidebar .nav-link i { width: 24px; margin-right: 10px; }
+        .main-content { margin-left: 250px; padding: 20px; }
+        .stat-card {
+            background: #141833;
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: transform 0.3s ease;
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-card .number { font-size: 2.5rem; font-weight: bold; color: #6C63FF; }
+        .stat-card .label { color: #a0aec0; font-size: 14px; }
+        .card { background: #141833; border: 1px solid rgba(255,255,255,0.05); border-radius: 15px; }
+        .card-header { background: transparent; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .table { color: #fff; }
+        .table thead th { border-bottom: 1px solid rgba(255,255,255,0.05); color: #a0aec0; }
+        .table td { border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .badge-open { background: #FFA502; }
+        .badge-in_progress { background: #00D4FF; color: #000; }
+        .badge-waiting { background: #FF6B6B; }
+        .badge-resolved { background: #2ED573; }
+        .badge-closed { background: #a0aec0; }
+        .badge-urgent { background: #FF4757; }
+        .badge-high { background: #FF6348; }
+        .badge-medium { background: #FFA502; }
+        .badge-low { background: #2ED573; }
+        @media (max-width: 768px) {
+            .sidebar { position: relative; width: 100%; min-height: auto; }
+            .main-content { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <div class="logo"><h4><i class="fas fa-headset"></i> Support</h4></div>
+    <nav class="nav flex-column">
+        <a class="nav-link active" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
+        <a class="nav-link" data-page="tickets"><i class="fas fa-ticket-alt"></i> Tickets <span class="badge bg-danger float-end" id="openCount">0</span></a>
+        <a class="nav-link" data-page="chat"><i class="fas fa-comments"></i> Chat <span class="badge bg-primary float-end" id="unreadCount">0</span></a>
+        <a class="nav-link" data-page="settings"><i class="fas fa-cog"></i> Paramètres</a>
+    </nav>
+    <hr class="border-secondary">
+    <div class="mt-auto">
+        <div class="d-flex align-items-center">
+            <div><small class="d-block">Admin Support</small><small class="text-secondary"><span style="color:#2ED573;">●</span> En ligne</small></div>
+        </div>
+    </div>
+</div>
+
+<div class="main-content" id="mainContent">
+    <div class="text-center py-5">
+        <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
+        <p class="mt-3 text-secondary">Chargement...</p>
+    </div>
+</div>
+
+<script>
+    const API_URL = '/api/support';
+    let currentPage = 'dashboard';
+
+    // Navigation
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', function() {
+            const page = this.dataset.page;
+            if (page) {
+                currentPage = page;
+                document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+                this.classList.add('active');
+                loadPage(page);
+            }
+        });
+    });
+
+    async function loadPage(page) {
+        const content = document.getElementById('mainContent');
+        if (page === 'dashboard') await loadDashboard(content);
+        else if (page === 'tickets') await loadTickets(content);
+        else if (page === 'chat') content.innerHTML = `<div class="card p-4"><h5><i class="fas fa-comments text-primary"></i> Chat en temps réel</h5><p class="text-secondary">Fonctionnalité à venir...</p></div>`;
+        else content.innerHTML = `<div class="card p-4"><h5>⚙️ Paramètres</h5><p class="text-secondary">Configuration du support...</p></div>`;
+    }
+
+    async function loadDashboard(content) {
+        try {
+            const stats = await fetch(`${API_URL}/stats`).then(r => r.json());
+            const tickets = await fetch(`${API_URL}/tickets?page=0&size=5`).then(r => r.json());
+
+            document.getElementById('openCount').textContent = stats.openTickets || 0;
+
+            content.innerHTML = `
+                <h4 class="mb-4"><i class="fas fa-chart-pie text-primary"></i> Dashboard Support</h4>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3"><div class="stat-card"><div class="number">${stats.totalTickets||0}</div><div class="label"><i class="fas fa-ticket-alt me-1"></i> Total</div></div></div>
+                    <div class="col-md-3"><div class="stat-card"><div class="number">${stats.openTickets||0}</div><div class="label"><i class="fas fa-clock text-warning me-1"></i> Ouverts</div></div></div>
+                    <div class="col-md-3"><div class="stat-card"><div class="number">${stats.inProgressTickets||0}</div><div class="label"><i class="fas fa-spinner text-info me-1"></i> En cours</div></div></div>
+                    <div class="col-md-3"><div class="stat-card"><div class="number">${stats.resolvedTickets||0}</div><div class="label"><i class="fas fa-check-circle text-success me-1"></i> Résolus</div></div></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><i class="fas fa-list"></i> Derniers tickets</div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>#</th><th>Sujet</th><th>Utilisateur</th><th>Statut</th><th>Priorité</th><th>Date</th></tr></thead>
+                                <tbody>${tickets.content && tickets.content.length>0 ? tickets.content.map(t=>`
+                                    <tr><td><code>${t.ticketNumber}</code></td><td>${t.subject}</td><td>${t.userName||t.userEmail||'-'}</td>
+                                    <td><span class="badge badge-${t.status.toLowerCase()}">${getStatusLabel(t.status)}</span></td>
+                                    <td><span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span></td>
+                                    <td>${new Date(t.createdAt).toLocaleDateString()}</td></tr>
+                                `).join('') : `<tr><td colspan="6" class="text-center text-secondary">Aucun ticket</td></tr>`}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            content.innerHTML = `<div class="alert alert-danger">Erreur: ${error.message}</div>`;
+        }
+    }
+
+    async function loadTickets(content) {
+        try {
+            const data = await fetch(`${API_URL}/tickets?page=0&size=50`).then(r => r.json());
+            content.innerHTML = `
+                <h4 class="mb-4"><i class="fas fa-ticket-alt text-primary"></i> Liste des tickets</h4>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>#</th><th>Sujet</th><th>Utilisateur</th><th>Catégorie</th><th>Statut</th><th>Priorité</th><th>Date</th></tr></thead>
+                                <tbody>${data.content && data.content.length>0 ? data.content.map(t=>`
+                                    <tr><td><code>${t.ticketNumber}</code></td><td>${t.subject}</td><td>${t.userName||t.userEmail||'-'}</td>
+                                    <td><span class="badge bg-secondary">${t.category}</span></td>
+                                    <td><span class="badge badge-${t.status.toLowerCase()}">${getStatusLabel(t.status)}</span></td>
+                                    <td><span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span></td>
+                                    <td>${new Date(t.createdAt).toLocaleString()}</td></tr>
+                                `).join('') : `<tr><td colspan="7" class="text-center text-secondary">Aucun ticket</td></tr>`}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            content.innerHTML = `<div class="alert alert-danger">Erreur: ${error.message}</div>`;
+        }
+    }
+
+    function getStatusLabel(status) {
+        const labels = { 'OPEN':'Ouvert','IN_PROGRESS':'En cours','WAITING':'En attente','RESOLVED':'Résolu','CLOSED':'Fermé' };
+        return labels[status]||status;
+    }
+
+    loadPage('dashboard');
+    setInterval(() => loadPage(currentPage), 30000);
+</script>
+</body>
+</html>
