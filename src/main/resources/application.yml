@@ -1,7 +1,7 @@
 spring:
   datasource:
-    # ✅ Utilisation de l'URL externe de Render
-    url: ${DATABASE_URL:jdbc:postgresql://dpg-d8naeg3tqb8s73cv0vbg-a.frankfurt-postgres.render.com/abdiltaxi}
+    # ✅ Utilisation de l'URL interne de Render (sans le port)
+    url: ${DATABASE_URL:jdbc:postgresql://dpg-d8naeg3tqb8s73cv0vbg-a/abdiltaxi?user=abdil_user&password=yKYugkBFwU2Z3sIa38somtDYVYn48Yte&sslmode=require}
     username: ${DATABASE_USERNAME:abdil_user}
     password: ${DATABASE_PASSWORD:yKYugkBFwU2Z3sIa38somtDYVYn48Yte}
     driver-class-name: org.postgresql.Driver
@@ -13,7 +13,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate  # ⚠️ Mettre 'validate' pour ne pas modifier les tables existantes
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -40,17 +40,15 @@ spring:
           starttls:
             enable: true
 
-  # ✅ AJOUT : Configuration Thymeleaf
   thymeleaf:
     prefix: classpath:/templates/
     suffix: .html
     mode: HTML
     encoding: UTF-8
-    cache: false  # Désactiver le cache en développement
+    cache: false
     servlet:
       content-type: text/html
 
-  # ✅ AJOUT : Configuration des ressources statiques
   web:
     resources:
       static-locations:
@@ -59,11 +57,9 @@ spring:
         - classpath:/resources/
         - classpath:/META-INF/resources/
       add-mappings: true
-    # Configurer les ressources statiques avec cache
     cache:
       period: 3600
 
-  # ✅ AJOUT : Configuration pour les pages d'erreur
   mvc:
     throw-exception-if-no-handler-found: false
     static-path-pattern: /**
@@ -72,24 +68,21 @@ server:
   port: ${PORT:8082}
   servlet:
     context-path: /api/support
-  # ✅ AJOUT : Configuration des erreurs
   error:
     whitelabel:
-      enabled: false  # Désactiver la page d'erreur par défaut de Spring
+      enabled: false
 
 logging:
   level:
     com.abdil.support: DEBUG
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
-    org.thymeleaf: DEBUG  # Ajout pour Thymeleaf
+    org.thymeleaf: DEBUG
 
-# Configuration du stockage
 storage:
   voice: ${STORAGE_VOICE_PATH:/tmp/voice}
   attachments: ${STORAGE_ATTACHMENTS_PATH:/tmp/attachments}
 
-# Notifications
 notification:
   email:
     enabled: ${NOTIFICATION_EMAIL_ENABLED:true}
@@ -97,13 +90,11 @@ notification:
   push:
     enabled: ${NOTIFICATION_PUSH_ENABLED:true}
 
-# Support
 support:
   max-tickets-per-agent: ${SUPPORT_MAX_TICKETS:5}
   auto-assign: ${SUPPORT_AUTO_ASSIGN:true}
   auto-close-days: ${SUPPORT_AUTO_CLOSE_DAYS:7}
 
-# URL du backend principal
 api:
   main:
     url: ${MAIN_API_URL:https://abdil-taxi-backend.onrender.com/api}
