@@ -66,8 +66,9 @@ spring:
 
 server:
   port: ${PORT:8082}
-  servlet:
-    context-path: /api/support
+  # ⚠️ context-path SUPPRIMÉ pour éviter le double préfixe
+  # servlet:
+  #   context-path: /api/support
   error:
     whitelabel:
       enabled: false

@@ -24,33 +24,30 @@ public class WebSocketController {
 
     @MessageMapping("/chat.sendMessage")
     public void sendMessage(@Payload ChatMessage chatMessage) {
-        log.info("Message reçu: {}", chatMessage);
+        log.info("📩 Message reçu pour le ticket: {}", chatMessage.getTicketId());
 
-        // Sauvegarder le message
         Message savedMessage = ticketService.saveWebSocketMessage(chatMessage);
+        String destination = "/topic/ticket/" + savedMessage.getTicketId();
 
-        // Envoyer à tous les participants du ticket
-        String destination = "/topic/ticket/" + chatMessage.getTicketId();
+        // ✅ Utilisation de convertAndSend avec Object
         messagingTemplate.convertAndSend(destination, savedMessage);
 
-        // Notifier l'autre partie (si connectée)
         notificationService.notifyNewMessageWebSocket(savedMessage);
-
-        // Marquer le message comme lu
         ticketService.markMessageAsRead(savedMessage.getId());
+
+        log.info("✅ Message envoyé vers: {}", destination);
     }
 
     @MessageMapping("/chat.typing")
     public void typing(@Payload TypingIndicator typing) {
         String destination = "/topic/ticket/" + typing.getTicketId() + "/typing";
         messagingTemplate.convertAndSend(destination, typing);
-        log.info("✍️ {} est en train d'écrire...", typing.getUserName());
+        log.info("✍️ {} est en train d'écrire", typing.getUserName());
     }
 
     @MessageMapping("/chat.read")
     public void markAsRead(@Payload ReadReceipt receipt) {
         ticketService.markMessagesAsRead(receipt.getTicketId(), receipt.getUserId());
-
         String destination = "/topic/ticket/" + receipt.getTicketId() + "/read";
         messagingTemplate.convertAndSend(destination, receipt);
         log.info("👀 Messages lus par {}", receipt.getUserName());
