@@ -61,6 +61,55 @@
             .sidebar { position: relative; width: 100%; min-height: auto; }
             .main-content { margin-left: 0; }
         }
+        /* Styles pour le chat */
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+        }
+        .message { margin-bottom: 15px; max-width: 80%; }
+        .message.user { margin-left: auto; }
+        .message .bubble {
+            padding: 10px 15px;
+            border-radius: 15px;
+            background: #141833;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .message.user .bubble { background: #6C63FF; }
+        .message .time { font-size: 11px; color: #a0aec0; margin-top: 4px; }
+        .message-input {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 10px 15px;
+            color: #fff;
+            width: 100%;
+        }
+        .message-input:focus { outline: none; border-color: #6C63FF; }
+        .btn-send { background: #6C63FF; border: none; padding: 10px 20px; border-radius: 10px; color: #fff; font-weight: 600; }
+        .btn-send:hover { background: #5a52d5; color: #fff; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .status-online { background: rgba(46, 213, 115, 0.15); color: #2ED573; }
+        .status-busy { background: rgba(255, 165, 2, 0.15); color: #FFA502; }
+        .status-offline { background: rgba(160, 174, 192, 0.15); color: #a0aec0; }
+        .typing-indicator { display: none; padding: 10px 15px; background: rgba(255,255,255,0.05); border-radius: 15px; width: fit-content; }
+        .typing-indicator .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #a0aec0;
+            margin: 0 3px;
+            animation: typing 1.4s infinite both;
+        }
+        .typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-10px); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -87,11 +136,123 @@
     </div>
 </div>
 
-<script>
-    const API_URL = '/api/support';
-    let currentPage = 'dashboard';
+<!-- ✅ SockJS et STOMP - Pour le WebSocket -->
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/stomp.min.js"></script>
 
-    // Navigation
+<script>
+    const API_URL = 'https://taxi-support-backend.onrender.com/api/support';
+    let currentPage = 'dashboard';
+    let stompClient = null;
+    let isConnected = false;
+
+    // ============================================================
+    // 1. CONNEXION WEBSOCKET VIA SockJS
+    // ============================================================
+    function connectWebSocket() {
+        try {
+            // ✅ Utilisation de SockJS au lieu du WebSocket direct
+            const socket = new SockJS('https://taxi-support-backend.onrender.com/ws-support');
+            stompClient = Stomp.over(socket);
+
+            stompClient.connect({}, function(frame) {
+                console.log('✅ Connecté au WebSocket via SockJS !');
+                isConnected = true;
+
+                // S'abonner aux messages du ticket 1 (exemple)
+                stompClient.subscribe('/topic/ticket/1', function(message) {
+                    const data = JSON.parse(message.body);
+                    console.log('📩 Nouveau message:', data);
+                    // Afficher le message dans le chat
+                    if (currentPage === 'chat') {
+                        displayMessage(data);
+                    }
+                });
+
+                // S'abonner aux indicateurs de frappe
+                stompClient.subscribe('/topic/ticket/1/typing', function(message) {
+                    const data = JSON.parse(message.body);
+                    console.log('✍️ Typing:', data);
+                    showTypingIndicator(data.userName);
+                });
+
+            }, function(error) {
+                console.error('❌ Erreur de connexion WebSocket:', error);
+                // Tentative de reconnexion après 5 secondes
+                setTimeout(connectWebSocket, 5000);
+            });
+
+        } catch (error) {
+            console.error('❌ Erreur SockJS:', error);
+            setTimeout(connectWebSocket, 5000);
+        }
+    }
+
+    // ============================================================
+    // 2. FONCTIONS DU CHAT
+    // ============================================================
+    function displayMessage(message) {
+        const chatContainer = document.getElementById('chatContainer');
+        if (!chatContainer) return;
+
+        const isUser = message.senderType === 'USER';
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isUser ? 'user' : ''}`;
+        messageDiv.innerHTML = `
+            <div class="bubble">
+                ${!isUser ? `<small class="text-secondary d-block mb-1">${message.senderName || 'Agent'}</small>` : ''}
+                <p class="mb-0">${message.content || message.message || 'Message vide'}</p>
+                <div class="time">${new Date().toLocaleTimeString()}</div>
+            </div>
+        `;
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function showTypingIndicator(userName) {
+        const indicator = document.getElementById('typingIndicator');
+        const text = document.getElementById('typingText');
+        if (indicator && text) {
+            text.textContent = `${userName} écrit...`;
+            indicator.style.display = 'block';
+            clearTimeout(window.typingTimeout);
+            window.typingTimeout = setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 2000);
+        }
+    }
+
+    function sendChatMessage() {
+        const input = document.getElementById('chatInput');
+        const message = input.value.trim();
+        if (!message || !stompClient || !isConnected) {
+            if (!isConnected) alert('WebSocket non connecté. Veuillez patienter...');
+            return;
+        }
+
+        const chatMessage = {
+            ticketId: 1, // À remplacer par l'ID du ticket actif
+            senderId: 1,
+            senderType: 'AGENT',
+            senderName: 'Admin Support',
+            content: message,
+            messageType: 'TEXT'
+        };
+
+        stompClient.send('/app/chat.sendMessage', {}, JSON.stringify(chatMessage));
+        input.value = '';
+
+        // Afficher immédiatement le message
+        displayMessage({
+            senderType: 'AGENT',
+            senderName: 'Moi',
+            content: message
+        });
+    }
+
+    // ============================================================
+    // 3. NAVIGATION ET CHARGEMENT DES PAGES
+    // ============================================================
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', function() {
             const page = this.dataset.page;
@@ -108,15 +269,14 @@
         const content = document.getElementById('mainContent');
         if (page === 'dashboard') await loadDashboard(content);
         else if (page === 'tickets') await loadTickets(content);
-        else if (page === 'chat') content.innerHTML = `<div class="card p-4"><h5><i class="fas fa-comments text-primary"></i> Chat en temps réel</h5><p class="text-secondary">Fonctionnalité à venir...</p></div>`;
-        else content.innerHTML = `<div class="card p-4"><h5>⚙️ Paramètres</h5><p class="text-secondary">Configuration du support...</p></div>`;
+        else if (page === 'chat') loadChat(content);
+        else content.innerHTML = `<div class="card p-4"><h5>⚙️ ${page}</h5><p class="text-secondary">Configuration...</p></div>`;
     }
 
     async function loadDashboard(content) {
         try {
             const stats = await fetch(`${API_URL}/stats`).then(r => r.json());
             const tickets = await fetch(`${API_URL}/tickets?page=0&size=5`).then(r => r.json());
-
             document.getElementById('openCount').textContent = stats.openTickets || 0;
 
             content.innerHTML = `
@@ -127,22 +287,14 @@
                     <div class="col-md-3"><div class="stat-card"><div class="number">${stats.inProgressTickets||0}</div><div class="label"><i class="fas fa-spinner text-info me-1"></i> En cours</div></div></div>
                     <div class="col-md-3"><div class="stat-card"><div class="number">${stats.resolvedTickets||0}</div><div class="label"><i class="fas fa-check-circle text-success me-1"></i> Résolus</div></div></div>
                 </div>
-                <div class="card">
-                    <div class="card-header"><i class="fas fa-list"></i> Derniers tickets</div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead><tr><th>#</th><th>Sujet</th><th>Utilisateur</th><th>Statut</th><th>Priorité</th><th>Date</th></tr></thead>
-                                <tbody>${tickets.content && tickets.content.length>0 ? tickets.content.map(t=>`
-                                    <tr><td><code>${t.ticketNumber}</code></td><td>${t.subject}</td><td>${t.userName||t.userEmail||'-'}</td>
-                                    <td><span class="badge badge-${t.status.toLowerCase()}">${getStatusLabel(t.status)}</span></td>
-                                    <td><span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span></td>
-                                    <td>${new Date(t.createdAt).toLocaleDateString()}</td></tr>
-                                `).join('') : `<tr><td colspan="6" class="text-center text-secondary">Aucun ticket</td></tr>`}</tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                <div class="card"><div class="card-header"><i class="fas fa-list"></i> Derniers tickets</div>
+                <div class="card-body"><div class="table-responsive"><table class="table"><thead><tr><th>#</th><th>Sujet</th><th>Utilisateur</th><th>Statut</th><th>Priorité</th><th>Date</th></tr></thead>
+                <tbody>${tickets.content && tickets.content.length>0 ? tickets.content.map(t=>`
+                    <tr><td><code>${t.ticketNumber}</code></td><td>${t.subject}</td><td>${t.userName||t.userEmail||'-'}</td>
+                    <td><span class="badge badge-${t.status.toLowerCase()}">${getStatusLabel(t.status)}</span></td>
+                    <td><span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span></td>
+                    <td>${new Date(t.createdAt).toLocaleDateString()}</td></tr>
+                `).join('') : `<tr><td colspan="6" class="text-center text-secondary">Aucun ticket</td></tr>`}</tbody></table></div></div></div>
             `;
         } catch (error) {
             content.innerHTML = `<div class="alert alert-danger">Erreur: ${error.message}</div>`;
@@ -154,26 +306,57 @@
             const data = await fetch(`${API_URL}/tickets?page=0&size=50`).then(r => r.json());
             content.innerHTML = `
                 <h4 class="mb-4"><i class="fas fa-ticket-alt text-primary"></i> Liste des tickets</h4>
-                <div class="card">
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead><tr><th>#</th><th>Sujet</th><th>Utilisateur</th><th>Catégorie</th><th>Statut</th><th>Priorité</th><th>Date</th></tr></thead>
-                                <tbody>${data.content && data.content.length>0 ? data.content.map(t=>`
-                                    <tr><td><code>${t.ticketNumber}</code></td><td>${t.subject}</td><td>${t.userName||t.userEmail||'-'}</td>
-                                    <td><span class="badge bg-secondary">${t.category}</span></td>
-                                    <td><span class="badge badge-${t.status.toLowerCase()}">${getStatusLabel(t.status)}</span></td>
-                                    <td><span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span></td>
-                                    <td>${new Date(t.createdAt).toLocaleString()}</td></tr>
-                                `).join('') : `<tr><td colspan="7" class="text-center text-secondary">Aucun ticket</td></tr>`}</tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                <div class="card"><div class="card-body"><div class="table-responsive"><table class="table">
+                <thead><tr><th>#</th><th>Sujet</th><th>Utilisateur</th><th>Catégorie</th><th>Statut</th><th>Priorité</th><th>Date</th></tr></thead>
+                <tbody>${data.content && data.content.length>0 ? data.content.map(t=>`
+                    <tr><td><code>${t.ticketNumber}</code></td><td>${t.subject}</td><td>${t.userName||t.userEmail||'-'}</td>
+                    <td><span class="badge bg-secondary">${t.category}</span></td>
+                    <td><span class="badge badge-${t.status.toLowerCase()}">${getStatusLabel(t.status)}</span></td>
+                    <td><span class="badge badge-${t.priority.toLowerCase()}">${t.priority}</span></td>
+                    <td>${new Date(t.createdAt).toLocaleString()}</td></tr>
+                `).join('') : `<tr><td colspan="7" class="text-center text-secondary">Aucun ticket</td></tr>`}</tbody></table></div></div></div>
             `;
         } catch (error) {
             content.innerHTML = `<div class="alert alert-danger">Erreur: ${error.message}</div>`;
         }
+    }
+
+    function loadChat(content) {
+        content.innerHTML = `
+            <h4 class="mb-4"><i class="fas fa-comments text-primary"></i> Chat en temps réel</h4>
+            <div class="card"><div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6><i class="fas fa-list"></i> Tickets actifs</h6>
+                        <div id="chatTicketList" class="list-group">
+                            <button class="list-group-item list-group-item-action bg-transparent text-secondary" onclick="selectChatTicket(1)">Ticket #1 - Test</button>
+                            <button class="list-group-item list-group-item-action bg-transparent text-secondary" onclick="selectChatTicket(2)">Ticket #2 - Support</button>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div id="chatContainer" class="chat-container" style="height:300px;">
+                            <div class="text-center text-secondary py-3">Aucun message</div>
+                        </div>
+                        <div id="typingIndicator" class="typing-indicator mt-2">
+                            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                            <span class="ms-2 text-secondary" id="typingText">L'agent écrit...</span>
+                        </div>
+                        <div class="mt-2 d-flex gap-2">
+                            <input type="text" id="chatInput" class="message-input" placeholder="Écrivez votre message..." onkeypress="if(event.key==='Enter' && !event.shiftKey){sendChatMessage();event.preventDefault();}">
+                            <button class="btn-send" onclick="sendChatMessage()"><i class="fas fa-paper-plane"></i></button>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-secondary" id="wsStatus">${isConnected ? '🟢 Connecté' : '🟡 Connexion en cours...'}</small>
+                        </div>
+                    </div>
+                </div>
+            </div></div>
+        `;
+    }
+
+    function selectChatTicket(ticketId) {
+        console.log('📋 Ticket sélectionné:', ticketId);
+        // Implémenter le changement de ticket
     }
 
     function getStatusLabel(status) {
@@ -181,8 +364,26 @@
         return labels[status]||status;
     }
 
+    // ============================================================
+    // 4. DÉMARRAGE
+    // ============================================================
+    // Connecter le WebSocket au chargement
+    connectWebSocket();
     loadPage('dashboard');
-    setInterval(() => loadPage(currentPage), 30000);
+
+    // Rafraîchir le dashboard toutes les 30 secondes
+    setInterval(() => {
+        if (currentPage === 'dashboard') loadPage('dashboard');
+    }, 30000);
+
+    // Mettre à jour le statut WebSocket
+    setInterval(() => {
+        const statusEl = document.getElementById('wsStatus');
+        if (statusEl) {
+            statusEl.textContent = isConnected ? '🟢 Connecté' : '🟡 Connexion en cours...';
+            statusEl.className = isConnected ? 'text-success' : 'text-warning';
+        }
+    }, 2000);
 </script>
 </body>
 </html>
