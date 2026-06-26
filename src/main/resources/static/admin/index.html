@@ -47,7 +47,7 @@
         .card-header { background: transparent; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .table { color: #fff; }
         .table thead th { border-bottom: 1px solid rgba(255,255,255,0.05); color: #a0aec0; }
-        .table td { border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .table td { border-bottom: 1px solid rgba(255,255,253,0.03); }
         .badge-open { background: #FFA502; }
         .badge-in_progress { background: #00D4FF; color: #000; }
         .badge-waiting { background: #FF6B6B; }
@@ -151,7 +151,7 @@
         try {
             const socket = new SockJS('https://taxi-support-backend.onrender.com/ws-support');
             stompClient = Stomp.over(socket);
-            stompClient.debug = null; // Désactive les logs lourds dans la console
+            stompClient.debug = null;
 
             stompClient.connect({}, function(frame) {
                 console.log('✅ Connecté au WebSocket via SockJS !');
@@ -173,13 +173,11 @@
     function subscribeToTicket(ticketId) {
         if (!stompClient || !isConnected) return;
 
-        // Se désabonner des anciens canaux si existants
         if (messageSubscription) messageSubscription.unsubscribe();
         if (typingSubscription) typingSubscription.unsubscribe();
 
         currentTicketId = ticketId;
 
-        // Écouter les nouveaux messages du ticket actif
         messageSubscription = stompClient.subscribe('/topic/ticket/' + ticketId, function(message) {
             const data = JSON.parse(message.body);
             if (currentPage === 'chat') {
@@ -187,7 +185,6 @@
             }
         });
 
-        // Écouter les indicateurs de frappe
         typingSubscription = stompClient.subscribe('/topic/ticket/' + ticketId + '/typing', function(message) {
             const data = JSON.parse(message.body);
             showTypingIndicator(data.userName);
@@ -198,12 +195,12 @@
         const chatContainer = document.getElementById('chatContainer');
         if (!chatContainer) return;
 
-        // Évite d'afficher en double les messages envoyés par soi-même
         if (message.senderType === 'AGENT' && document.getElementById('msg-' + message.id)) return;
 
         const isUser = message.senderType === 'USER';
         const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${isUser ? '' : 'user'}`; // Inversé pour l'Agent (Ses messages vont à droite)
+        // Pour l'admin (index.html), les messages envoyés par lui-même (AGENT) s'affichent à droite (user)
+        messageDiv.className = `message ${isUser ? '' : 'user'}`;
         if(message.id) messageDiv.id = 'msg-' + message.id;
 
         messageDiv.innerHTML = `
@@ -243,7 +240,7 @@
 
         const chatMessage = {
             ticketId: currentTicketId,
-            senderId: 999, // ID Admin static ou dynamique
+            senderId: 999,
             senderType: 'AGENT',
             senderName: 'Admin Support',
             content: message,
@@ -294,7 +291,6 @@
     async function loadDashboard(content) {
         try {
             const stats = await fetch(`${API_URL}/stats`).then(r => r.json());
-            const tickets = await fetch(`${API_URL}/tickets?page=0&size=5`).then(r => r.json());
             document.getElementById('openCount').textContent = stats.openTickets || 0;
 
             content.innerHTML = `

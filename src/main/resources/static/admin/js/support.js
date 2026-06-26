@@ -1,6 +1,6 @@
 // Configuration
-const API_BASE_URL = 'https://abdil-taxi-backend.onrender.com/api/support';
-const WS_URL = 'https://abdil-taxi-backend.onrender.com/ws-support';
+const API_BASE_URL = 'https://taxi-support-backend.onrender.com/api/support';
+const WS_URL = 'https://taxi-support-backend.onrender.com/ws-support';
 
 let stompClient = null;
 let currentTicketId = null;
@@ -517,6 +517,8 @@ function subscribeToTicketChannel(ticketId) {
 
             const isUser = msg.senderType === 'USER';
             const div = document.createElement('div');
+            // Côté Agent (support.js), les messages de l'user (client) vont à gauche (classe message seule)
+            // et ceux de l'agent vont à droite (classe message user)
             div.className = `message ${isUser ? '' : 'user'}`;
             div.innerHTML = `
                 <div class="bubble">

@@ -60,7 +60,7 @@
         <button onclick="sendMessage()"><i class="fas fa-paper-plane"></i> Envoyer</button>
     </div>
 
-    <div class="status" id="connectionStatus">编 Connexion en cours...</div>
+    <div class="status" id="connectionStatus">🟡 Connexion en cours...</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
@@ -69,7 +69,7 @@
     let stompClient = null;
     let isConnected = false;
     let userId = Math.floor(Math.random() * 10000);
-    let defaultTicketId = 1; // Ticket général de discussion par défaut
+    let defaultTicketId = 1;
 
     const chatMessages = document.getElementById('chatMessages');
     const messageInput = document.getElementById('messageInput');
@@ -81,7 +81,7 @@
         try {
             const socket = new SockJS('https://taxi-support-backend.onrender.com/ws-support');
             stompClient = Stomp.over(socket);
-            stompClient.debug = null; // Nettoyer la console
+            stompClient.debug = null;
 
             stompClient.connect({}, function(frame) {
                 console.log('✅ Connecté au WebSocket');
@@ -89,7 +89,6 @@
                 statusEl.className = 'status online';
                 statusEl.innerHTML = '🟢 Connecté - Posez votre question ci-dessous';
 
-                // ✅ Correction Majeure : S'abonner au canal du ticket au lieu de /topic/support
                 stompClient.subscribe('/topic/ticket/' + defaultTicketId, function(message) {
                     const data = JSON.parse(message.body);
                     displayMessage(data);
@@ -120,7 +119,7 @@
         const userName = userType === 'CLIENT' ? 'Client' : 'Chauffeur';
 
         const chatMessage = {
-            ticketId: defaultTicketId, // Envoi vers le ticket 1
+            ticketId: defaultTicketId,
             senderId: userId,
             senderType: 'USER',
             senderName: userName,
@@ -133,13 +132,9 @@
     }
 
     function displayMessage(message) {
-        // Évite le doublon visuel si c'est nous qui l'avons envoyé
-        if (message.senderType === 'USER' && message.senderId === userId) {
-            // Optionnel : ajouter un ID unique au message si votre backend le retourne pour filtrage précis
-        }
-
         const isUser = message.senderType === 'USER';
         const div = document.createElement('div');
+        // Côté Client (chat.html), ses propres messages (USER) doivent aller à droite (.user)
         div.className = `message ${isUser ? 'user' : ''}`;
         div.innerHTML = `
             <div class="bubble">

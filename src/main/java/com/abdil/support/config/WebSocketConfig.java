@@ -12,7 +12,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // ✅ Prefixes pour les destinations
+        // Prefixes pour les destinations
         config.enableSimpleBroker("/topic", "/queue", "/user");
         config.setApplicationDestinationPrefixes("/app");
         config.setUserDestinationPrefix("/user");
@@ -20,7 +20,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // ✅ Endpoint WebSocket avec SockJS et gestion explicite des origines
+        // Endpoint WebSocket avec SockJS et gestion explicite des origines pour Render
         registry.addEndpoint("/ws-support")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
