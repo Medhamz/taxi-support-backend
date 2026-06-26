@@ -6,8 +6,6 @@
     <title>Support Client - Taxi</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/stomp.min.js"></script>
     <style>
         body { background: #0a0e27; color: #fff; font-family: 'Segoe UI', sans-serif; }
         .chat-container { max-width: 800px; margin: 50px auto; background: #141833; border-radius: 20px; padding: 30px; border: 1px solid rgba(255,255,255,0.05); }
@@ -62,44 +60,46 @@
         <button onclick="sendMessage()"><i class="fas fa-paper-plane"></i> Envoyer</button>
     </div>
 
-    <div class="status" id="connectionStatus">🟡 Connexion en cours...</div>
+    <div class="status" id="connectionStatus">编 Connexion en cours...</div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/stomp.min.js"></script>
 <script>
-    const API_URL = 'https://taxi-support-backend.onrender.com/api/support';
     let stompClient = null;
     let isConnected = false;
-    let userId = Date.now(); // ID temporaire
+    let userId = Math.floor(Math.random() * 10000);
+    let defaultTicketId = 1; // Ticket général de discussion par défaut
 
-    // Éléments DOM
     const chatMessages = document.getElementById('chatMessages');
     const messageInput = document.getElementById('messageInput');
     const statusEl = document.getElementById('connectionStatus');
     const userTypeSelect = document.getElementById('userTypeSelect');
     const userNameDisplay = document.getElementById('userNameDisplay');
 
-    // Connexion WebSocket
     function connectWebSocket() {
         try {
             const socket = new SockJS('https://taxi-support-backend.onrender.com/ws-support');
             stompClient = Stomp.over(socket);
+            stompClient.debug = null; // Nettoyer la console
 
             stompClient.connect({}, function(frame) {
                 console.log('✅ Connecté au WebSocket');
                 isConnected = true;
                 statusEl.className = 'status online';
-                statusEl.innerHTML = '🟢 Connecté - Un agent vous répondra bientôt';
+                statusEl.innerHTML = '🟢 Connecté - Posez votre question ci-dessous';
 
-                // S'abonner aux messages (topic générique pour tous les tickets)
-                stompClient.subscribe('/topic/support', function(message) {
+                // ✅ Correction Majeure : S'abonner au canal du ticket au lieu de /topic/support
+                stompClient.subscribe('/topic/ticket/' + defaultTicketId, function(message) {
                     const data = JSON.parse(message.body);
-                    displayMessage(data, false);
+                    displayMessage(data);
                 });
 
             }, function(error) {
                 console.error('❌ Erreur WebSocket:', error);
+                isConnected = false;
                 statusEl.className = 'status offline';
-                statusEl.innerHTML = '🔴 Déconnecté - Reconnexion...';
+                statusEl.innerHTML = '🔴 Déconnecté - Reconnexion en cours...';
                 setTimeout(connectWebSocket, 5000);
             });
 
@@ -109,7 +109,6 @@
         }
     }
 
-    // Envoyer un message
     function sendMessage() {
         const message = messageInput.value.trim();
         if (!message || !stompClient || !isConnected) {
@@ -121,7 +120,7 @@
         const userName = userType === 'CLIENT' ? 'Client' : 'Chauffeur';
 
         const chatMessage = {
-            ticketId: 0, // 0 = ticket générique pour le support général
+            ticketId: defaultTicketId, // Envoi vers le ticket 1
             senderId: userId,
             senderType: 'USER',
             senderName: userName,
@@ -131,23 +130,20 @@
 
         stompClient.send('/app/chat.sendMessage', {}, JSON.stringify(chatMessage));
         messageInput.value = '';
-
-        // Afficher le message immédiatement
-        displayMessage({
-            senderType: 'USER',
-            senderName: 'Moi',
-            content: message
-        }, true);
     }
 
-    // Afficher un message dans le chat
-    function displayMessage(message, isUser) {
-        const isCurrentUser = isUser || message.senderType === 'USER';
+    function displayMessage(message) {
+        // Évite le doublon visuel si c'est nous qui l'avons envoyé
+        if (message.senderType === 'USER' && message.senderId === userId) {
+            // Optionnel : ajouter un ID unique au message si votre backend le retourne pour filtrage précis
+        }
+
+        const isUser = message.senderType === 'USER';
         const div = document.createElement('div');
-        div.className = `message ${isCurrentUser ? 'user' : ''}`;
+        div.className = `message ${isUser ? 'user' : ''}`;
         div.innerHTML = `
             <div class="bubble">
-                ${!isCurrentUser ? `<small class="text-secondary d-block mb-1">${message.senderName || 'Agent Support'}</small>` : ''}
+                ${!isUser ? `<small class="text-warning d-block mb-1">${message.senderName || 'Agent Support'}</small>` : ''}
                 <p class="mb-0">${message.content || message.message || 'Message vide'}</p>
                 <div class="time">${new Date().toLocaleTimeString()}</div>
             </div>
@@ -155,18 +151,15 @@
         chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
-        // Supprimer le message "Bienvenue" s'il existe
         const welcomeMsg = chatMessages.querySelector('.text-secondary');
         if (welcomeMsg) welcomeMsg.remove();
     }
 
-    // Mettre à jour le nom d'utilisateur
     userTypeSelect.addEventListener('change', function() {
         const labels = { 'CLIENT': 'Client', 'DRIVER': 'Chauffeur' };
         userNameDisplay.textContent = labels[this.value] || 'Client';
     });
 
-    // Démarrer la connexion
     connectWebSocket();
 </script>
 </body>

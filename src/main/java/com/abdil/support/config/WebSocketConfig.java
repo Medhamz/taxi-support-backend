@@ -20,9 +20,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // ✅ Endpoint WebSocket avec SockJS activé
+        // ✅ Endpoint WebSocket avec SockJS et gestion explicite des origines
         registry.addEndpoint("/ws-support")
                 .setAllowedOriginPatterns("*")
-                .withSockJS();  // ✅ C'est cette ligne qui active SockJS
+                .withSockJS();
     }
 }
