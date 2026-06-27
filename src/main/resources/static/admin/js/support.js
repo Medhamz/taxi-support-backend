@@ -148,22 +148,21 @@ async function loadStats() {
         document.getElementById('statInProgress').textContent = stats.inProgressTickets || 0;
         document.getElementById('statResolved').textContent = stats.resolvedTickets || 0;
 
-        // ✅ Mettre à jour le badge "Tickets" dans la sidebar (TOUJOURS visible)
+        // ✅ BADGE "Tickets" : Affiche le nombre TOTAL de tickets
         const openCountBadge = document.getElementById('openCount');
         if (openCountBadge) {
-            const openCount = stats.openTickets || 0;
-            openCountBadge.textContent = openCount;
-            // Toujours afficher le badge, même si c'est 0
+            const totalTickets = stats.totalTickets || 0;
+            openCountBadge.textContent = totalTickets;
             openCountBadge.style.display = 'inline-block';
         }
 
-        // ✅ Mettre à jour le badge "Chat" dans la sidebar (TOUJOURS visible)
+        // ✅ BADGE "Chat" : Affiche le nombre de tickets NON FERMÉS
         const unreadCountBadge = document.getElementById('unreadCount');
         if (unreadCountBadge) {
-            // On compte les tickets en attente + en cours comme "actifs" pour le chat
-            const activeTickets = (stats.openTickets || 0) + (stats.inProgressTickets || 0);
+            // Total - Fermés = Tickets actifs (incluant résolus)
+            const closedTickets = stats.closedTickets || 0;
+            const activeTickets = (stats.totalTickets || 0) - closedTickets;
             unreadCountBadge.textContent = activeTickets;
-            // Toujours afficher le badge, même si c'est 0
             unreadCountBadge.style.display = 'inline-block';
         }
 
@@ -172,7 +171,8 @@ async function loadStats() {
             open: stats.openTickets,
             inProgress: stats.inProgressTickets,
             resolved: stats.resolvedTickets,
-            activeChat: (stats.openTickets || 0) + (stats.inProgressTickets || 0)
+            closed: stats.closedTickets,
+            activeChat: (stats.totalTickets || 0) - (stats.closedTickets || 0)
         });
 
     } catch (error) {
