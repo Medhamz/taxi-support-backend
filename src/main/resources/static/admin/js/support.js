@@ -159,7 +159,6 @@ async function loadStats() {
         // ✅ BADGE "Chat" : Affiche uniquement les tickets EN ATTENTE (WAITING)
         const unreadCountBadge = document.getElementById('unreadCount');
         if (unreadCountBadge) {
-            // On compte uniquement les tickets avec le statut WAITING
             const waitingTickets = stats.waitingTickets || 0;
             unreadCountBadge.textContent = waitingTickets;
             unreadCountBadge.style.display = 'inline-block';
@@ -248,6 +247,17 @@ async function loadTickets(filters = {}) {
 function getStatusLabel(status) {
     const labels = { 'OPEN': 'Ouvert', 'IN_PROGRESS': 'En cours', 'WAITING': 'En attente', 'RESOLVED': 'Résolu', 'CLOSED': 'Fermé' };
     return labels[status] || status;
+}
+
+function getStatusBadgeClass(status) {
+    const classes = {
+        'OPEN': 'badge-open',
+        'IN_PROGRESS': 'badge-in_progress',
+        'WAITING': 'badge-waiting',
+        'RESOLVED': 'badge-resolved',
+        'CLOSED': 'badge-closed'
+    };
+    return classes[status] || 'badge-secondary';
 }
 
 // ==================== PAGE TICKETS ====================
@@ -572,7 +582,7 @@ function loadMessagesPage() {
     });
 }
 
-// ==================== CHARGEMENT DES TICKETS POUR LE CHAT ====================
+// ==================== CHARGEMENT DES TICKETS POUR LE CHAT (AVEC DIFFÉRENCIATION) ====================
 async function loadTicketListChat() {
     try {
         const data = await loadTickets();
@@ -584,17 +594,34 @@ async function loadTicketListChat() {
             return;
         }
 
-        container.innerHTML = data.content.map(ticket => `
-            <div class="ticket-item priority-${ticket.priority.toLowerCase()} ${ticket.id === currentTicketId ? 'border border-primary' : ''}"
-                 data-ticket-id="${ticket.id}" onclick="selectTicket(${ticket.id})">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <h6 class="mb-1 mt-1">${ticket.subject || 'Sans Sujet'}</h6>
-                        <small class="text-secondary"><i class="fas fa-user"></i> ${ticket.userName || 'Anonyme'}</small>
+        // ✅ Affichage des tickets avec différenciation pour les tickets résolus
+        container.innerHTML = data.content.map(ticket => {
+            const isResolved = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED';
+            const statusLabel = getStatusLabel(ticket.status);
+            const statusBadgeClass = getStatusBadgeClass(ticket.status);
+
+            return `
+                <div class="ticket-item priority-${ticket.priority.toLowerCase()} ${ticket.id === currentTicketId ? 'border border-primary' : ''} ${isResolved ? 'ticket-resolved' : ''}"
+                     data-ticket-id="${ticket.id}" onclick="selectTicket(${ticket.id})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1 mt-1">
+                                ${ticket.subject || 'Sans Sujet'}
+                                ${isResolved ? ' <i class="fas fa-check-circle text-success" title="Ticket résolu"></i>' : ''}
+                            </h6>
+                            <small class="text-secondary">
+                                <i class="fas fa-user"></i> ${ticket.userName || 'Anonyme'}
+                                <span class="badge ${statusBadgeClass} ms-2">${statusLabel}</span>
+                            </small>
+                        </div>
+                        ${isResolved ? '<span class="badge bg-success ms-2"><i class="fas fa-check"></i> Résolu</span>' : ''}
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
+
+        // Ajouter un séparateur ou un titre pour les tickets résolus si nécessaire
+        // On peut aussi filtrer pour ne montrer que les tickets non résolus
 
     } catch (error) {
         console.error('Erreur chargement liste tickets:', error);
@@ -621,8 +648,16 @@ async function loadTicketMessages(ticketId) {
 
         const header = document.getElementById('chatHeader');
         if (header) {
-            header.innerHTML = `<h6>Ticket #${ticket.ticketNumber || ticket.id} - ${ticket.subject}</h6>
-                               <small class="text-secondary">${ticket.userName || 'Utilisateur'}</small>`;
+            const statusLabel = getStatusLabel(ticket.status);
+            const isResolved = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED';
+            header.innerHTML = `
+                <h6>Ticket #${ticket.ticketNumber || ticket.id} - ${ticket.subject}</h6>
+                <small class="text-secondary">
+                    ${ticket.userName || 'Utilisateur'}
+                    <span class="badge ${getStatusBadgeClass(ticket.status)} ms-2">${statusLabel}</span>
+                    ${isResolved ? ' <span class="badge bg-success"><i class="fas fa-check"></i> Terminé</span>' : ''}
+                </small>
+            `;
         }
 
         const container = document.getElementById('chatContainer');

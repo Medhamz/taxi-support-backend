@@ -48,15 +48,15 @@
         .table { color: #fff; }
         .table thead th { border-bottom: 1px solid rgba(255,255,255,0.05); color: #a0aec0; }
         .table td { border-bottom: 1px solid rgba(255,255,253,0.03); }
-        .badge-open { background: #FFA502; }
+        .badge-open { background: #FFA502; color: #000; }
         .badge-in_progress { background: #00D4FF; color: #000; }
-        .badge-waiting { background: #FF6B6B; }
-        .badge-resolved { background: #2ED573; }
-        .badge-closed { background: #a0aec0; }
-        .badge-urgent { background: #FF4757; }
-        .badge-high { background: #FF6348; }
-        .badge-medium { background: #FFA502; }
-        .badge-low { background: #2ED573; }
+        .badge-waiting { background: #FF6B6B; color: #fff; }
+        .badge-resolved { background: #2ED573; color: #000; }
+        .badge-closed { background: #a0aec0; color: #000; }
+        .badge-urgent { background: #FF4757; color: #fff; }
+        .badge-high { background: #FF6348; color: #fff; }
+        .badge-medium { background: #FFA502; color: #000; }
+        .badge-low { background: #2ED573; color: #000; }
         @media (max-width: 768px) {
             .sidebar { position: relative; width: 100%; min-height: auto; }
             .main-content { margin-left: 0; }
@@ -124,6 +124,57 @@
         .ticket-item.priority-medium { border-left-color: #FFA502; }
         .ticket-item.priority-low { border-left-color: #2ED573; }
         .ticket-list { background: #141833; border-radius: 15px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); }
+
+        /* ==================== STYLES POUR LES TICKETS RÉSOLUS ==================== */
+        /* Style pour les tickets résolus dans la liste des chats */
+        .ticket-item.ticket-resolved {
+            opacity: 0.7;
+            border-left-color: #2ED573 !important;
+            background: rgba(46, 213, 115, 0.05);
+        }
+
+        .ticket-item.ticket-resolved:hover {
+            background: rgba(46, 213, 115, 0.1);
+            opacity: 0.9;
+        }
+
+        .ticket-item.ticket-resolved h6 {
+            color: #a0aec0;
+        }
+
+        .ticket-item.ticket-resolved .text-secondary {
+            color: #6c757d !important;
+        }
+
+        /* Badge résolu spécial */
+        .badge-resolved-custom {
+            background: #2ED573;
+            color: #000;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Icône de vérification pour les tickets résolus */
+        .ticket-resolved .fa-check-circle {
+            color: #2ED573;
+        }
+
+        /* Message "Ticket résolu" dans l'en-tête du chat */
+        .ticket-resolved-banner {
+            background: rgba(46, 213, 115, 0.15);
+            border: 1px solid rgba(46, 213, 115, 0.3);
+            border-radius: 8px;
+            padding: 8px 15px;
+            color: #2ED573;
+            font-size: 13px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        /* ==================== FIN STYLES TICKETS RÉSOLUS ==================== */
     </style>
 </head>
 <body>
