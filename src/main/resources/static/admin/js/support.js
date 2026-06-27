@@ -39,15 +39,6 @@ function loadPage(page) {
         case 'messages':
             loadMessagesPage();
             break;
-        case 'agents':
-            loadAgentsPage();
-            break;
-        case 'categories':
-            loadCategoriesPage();
-            break;
-        case 'quick-responses':
-            loadQuickResponsesPage();
-            break;
         case 'settings':
             loadSettingsPage();
             break;
@@ -151,10 +142,10 @@ async function loadStats() {
         const response = await fetch(`${API_BASE_URL}/stats`);
         const stats = await response.json();
 
-        document.getElementById('statTotal').textContent = stats.totalTickets || stats.total || 0;
-        document.getElementById('statOpen').textContent = stats.openTickets || stats.open || 0;
-        document.getElementById('statInProgress').textContent = stats.inProgressTickets || stats.inProgress || 0;
-        document.getElementById('statResolved').textContent = stats.resolvedTickets || stats.resolved || 0;
+        document.getElementById('statTotal').textContent = stats.totalTickets || 0;
+        document.getElementById('statOpen').textContent = stats.openTickets || 0;
+        document.getElementById('statInProgress').textContent = stats.inProgressTickets || 0;
+        document.getElementById('statResolved').textContent = stats.resolvedTickets || 0;
 
     } catch (error) {
         console.error('Erreur chargement stats:', error);
@@ -231,6 +222,109 @@ function getStatusLabel(status) {
     return labels[status] || status;
 }
 
+// ==================== PAGE TICKETS ====================
+function loadTicketsPage() {
+    const content = document.getElementById('mainContent');
+    content.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-ticket-alt text-primary"></i> Tous les tickets</h2>
+            <button class="btn btn-outline-primary" onclick="loadTicketsPage()">
+                <i class="fas fa-sync-alt"></i> Rafraîchir
+            </button>
+        </div>
+
+        <div class="card p-3 mb-3">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <select class="form-control" id="filterStatus" onchange="applyFilters()">
+                        <option value="">Tous les statuts</option>
+                        <option value="OPEN">Ouvert</option>
+                        <option value="IN_PROGRESS">En cours</option>
+                        <option value="WAITING">En attente</option>
+                        <option value="RESOLVED">Résolu</option>
+                        <option value="CLOSED">Fermé</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-control" id="filterPriority" onchange="applyFilters()">
+                        <option value="">Toutes les priorités</option>
+                        <option value="URGENT">Urgent</option>
+                        <option value="HIGH">Élevée</option>
+                        <option value="MEDIUM">Moyenne</option>
+                        <option value="LOW">Basse</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="ticket-list">
+            <div id="ticketListTable">
+                <div class="text-center text-secondary">Chargement...</div>
+            </div>
+        </div>
+    `;
+
+    loadTicketListTable();
+}
+
+async function loadTicketListTable() {
+    try {
+        const status = document.getElementById('filterStatus')?.value;
+        const priority = document.getElementById('filterPriority')?.value;
+
+        const data = await loadTickets({ status, priority });
+        const container = document.getElementById('ticketListTable');
+
+        if (!container) return;
+
+        if (!data.content || data.content.length === 0) {
+            container.innerHTML = `<div class="text-center text-secondary py-3"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>Aucun ticket</div>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Sujet</th>
+                        <th>Utilisateur</th>
+                        <th>Catégorie</th>
+                        <th>Statut</th>
+                        <th>Priorité</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.content.map(ticket => `
+                        <tr>
+                            <td>${ticket.ticketNumber || ticket.id}</td>
+                            <td>${ticket.subject || 'Sans sujet'}</td>
+                            <td>${ticket.userName || 'Anonyme'}</td>
+                            <td>${ticket.category || 'GENERAL'}</td>
+                            <td><span class="badge badge-${ticket.status?.toLowerCase()}">${getStatusLabel(ticket.status)}</span></td>
+                            <td><span class="badge ${ticket.priority === 'URGENT' ? 'badge-urgent' : ticket.priority === 'HIGH' ? 'badge-high' : ticket.priority === 'MEDIUM' ? 'badge-medium' : 'badge-low'}">${ticket.priority || 'MEDIUM'}</span></td>
+                            <td>${new Date(ticket.createdAt).toLocaleDateString()}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="openTicket(${ticket.id})">
+                                    <i class="fas fa-comment"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (error) {
+        console.error('Erreur chargement tickets:', error);
+    }
+}
+
+function applyFilters() {
+    loadTicketListTable();
+}
+
 // ==================== OUVERTURE D'UN TICKET ====================
 function openTicket(ticketId) {
     currentTicketId = ticketId;
@@ -288,15 +382,15 @@ function loadMessagesPage() {
         </div>
     `;
 
-    loadTicketList().then(() => {
+    loadTicketListChat().then(() => {
         if (currentTicketId) {
             selectTicket(currentTicketId);
         }
     });
 }
 
-// ==================== CHARGEMENT DES TICKETS ====================
-async function loadTicketList() {
+// ==================== CHARGEMENT DES TICKETS POUR LE CHAT ====================
+async function loadTicketListChat() {
     try {
         const data = await loadTickets();
         const container = document.getElementById('ticketList');
@@ -333,11 +427,10 @@ function selectTicket(ticketId) {
     const activeItem = document.querySelector(`.ticket-item[data-ticket-id="${ticketId}"]`);
     if (activeItem) activeItem.classList.add('border', 'border-primary');
 
-    // Démarrer le polling pour ce ticket
     startPolling(ticketId);
 }
 
-// ==================== CHARGEMENT DES MESSAGES API ====================
+// ==================== CHARGEMENT DES MESSAGES ====================
 async function loadTicketMessages(ticketId) {
     try {
         const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}`);
@@ -345,7 +438,8 @@ async function loadTicketMessages(ticketId) {
 
         const header = document.getElementById('chatHeader');
         if (header) {
-            header.innerHTML = `<h6>Ticket #${ticket.ticketNumber || ticket.id} - ${ticket.subject}</h6>`;
+            header.innerHTML = `<h6>Ticket #${ticket.ticketNumber || ticket.id} - ${ticket.subject}</h6>
+                               <small class="text-secondary">${ticket.userName || 'Utilisateur'}</small>`;
         }
 
         const container = document.getElementById('chatContainer');
@@ -360,7 +454,6 @@ async function loadTicketMessages(ticketId) {
                 return;
             }
 
-            // Mettre à jour lastMessageId pour le polling
             if (ticket.messages.length > 0) {
                 lastMessageId = ticket.messages[ticket.messages.length - 1].id || 0;
             }
@@ -370,8 +463,8 @@ async function loadTicketMessages(ticketId) {
                 return `
                     <div class="message ${isUser ? '' : 'user'}">
                         <div class="bubble">
-                            ${!isUser ? `<small class="text-warning d-block mb-1">${msg.senderName || 'Agent Support'}</small>` : ''}
-                            <p class="mb-0">${msg.content || msg.message}</p>
+                            ${isUser ? `<small class="text-info d-block mb-1">${msg.senderName || 'Client'}</small>` : ''}
+                            <p class="mb-0">${msg.message || msg.content || 'Message'}</p>
                             <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
                         </div>
                     </div>
@@ -384,15 +477,13 @@ async function loadTicketMessages(ticketId) {
     }
 }
 
-// ==================== POLLING POUR NOUVEAUX MESSAGES ====================
+// ==================== POLLING ====================
 function startPolling(ticketId) {
-    // Arrêter l'ancien polling
     if (pollingInterval) {
         clearInterval(pollingInterval);
         pollingInterval = null;
     }
 
-    // Démarrer le nouveau polling (toutes les 2 secondes)
     pollingInterval = setInterval(() => {
         checkNewMessages(ticketId);
     }, 2000);
@@ -407,14 +498,11 @@ async function checkNewMessages(ticketId) {
 
         const lastMsg = ticket.messages[ticket.messages.length - 1];
         if (lastMsg.id > lastMessageId) {
-            // Nouveaux messages ! Les afficher
             const container = document.getElementById('chatContainer');
             if (container) {
-                // Supprimer le message "Aucun message" s'il existe
                 const emptyMsg = container.querySelector('.text-secondary');
                 if (emptyMsg) emptyMsg.remove();
 
-                // Ajouter les nouveaux messages
                 const newMessages = ticket.messages.filter(msg => msg.id > lastMessageId);
                 newMessages.forEach(msg => {
                     const isUser = msg.senderType === 'USER';
@@ -422,72 +510,104 @@ async function checkNewMessages(ticketId) {
                     div.className = `message ${isUser ? '' : 'user'}`;
                     div.innerHTML = `
                         <div class="bubble">
-                            ${!isUser ? `<small class="text-warning d-block mb-1">${msg.senderName || 'Agent Support'}</small>` : ''}
-                            <p class="mb-0">${msg.content || msg.message}</p>
+                            ${isUser ? `<small class="text-info d-block mb-1">${msg.senderName || 'Client'}</small>` : ''}
+                            <p class="mb-0">${msg.message || msg.content || 'Message'}</p>
                             <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
                         </div>
                     `;
                     container.appendChild(div);
                 });
                 container.scrollTop = container.scrollHeight;
-
-                // Mettre à jour lastMessageId
                 lastMessageId = lastMsg.id;
             }
         }
     } catch (error) {
-        console.error('Erreur polling messages:', error);
+        console.error('Erreur polling:', error);
     }
 }
 
-// ==================== ENVOYER UN MESSAGE ====================
+// ==================== ENVOYER UN MESSAGE (CORRIGÉ) ====================
 async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
 
-    if (!message || !currentTicketId) return;
+    if (!message || !currentTicketId) {
+        alert('Veuillez écrire un message');
+        return;
+    }
 
     try {
-        const chatMessage = {
-            ticketId: currentTicketId,
-            senderId: 1,
+        // ✅ CORRECTION : Utiliser le bon endpoint et le bon champ
+        const messageRequest = {
+            message: message,  // ← Changé de "content" à "message"
+            senderId: 999,
             senderType: 'AGENT',
-            senderName: 'Support Agent',
-            content: message,
+            senderName: 'Admin Support',
             messageType: 'TEXT'
         };
 
-        const response = await fetch(`${API_BASE_URL}/messages`, {
+        console.log('📤 Envoi du message:', messageRequest);
+
+        // ✅ CORRECTION : URL correcte
+        const response = await fetch(`${API_BASE_URL}/tickets/${currentTicketId}/messages`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(chatMessage)
+            body: JSON.stringify(messageRequest)
         });
 
         if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Message envoyé:', result);
             input.value = '';
-            // Recharger les messages pour voir le nouveau message
+            // Recharger les messages
             await loadTicketMessages(currentTicketId);
         } else {
-            console.error('Erreur envoi message:', await response.text());
-            alert('Erreur lors de l\'envoi du message');
+            const errorText = await response.text();
+            console.error('❌ Erreur envoi message:', errorText);
+            alert('Erreur lors de l\'envoi du message: ' + errorText);
         }
     } catch (error) {
-        console.error('Erreur envoi message:', error);
-        alert('Erreur de connexion');
+        console.error('❌ Erreur envoi message:', error);
+        alert('Erreur de connexion: ' + error.message);
     }
 }
 
-function refreshDashboard() { loadStats(); loadUrgentTickets(); }
+// ==================== PARAMÈTRES ====================
+function loadSettingsPage() {
+    const content = document.getElementById('mainContent');
+    content.innerHTML = `
+        <h2><i class="fas fa-cog text-primary"></i> Paramètres</h2>
+        <div class="card p-4 mt-3">
+            <h5>Configuration du support</h5>
+            <p class="text-secondary">API Base URL: ${API_BASE_URL}</p>
+            <hr>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+                <label class="form-check-label" for="autoRefresh">Auto-raffraîchissement (polling 2s)</label>
+            </div>
+            <button class="btn btn-primary mt-3" onclick="refreshDashboard()">
+                <i class="fas fa-sync-alt"></i> Forcer le rafraîchissement
+            </button>
+        </div>
+    `;
+}
+
+// ==================== FONCTIONS UTILITAIRES ====================
+function refreshDashboard() {
+    loadStats();
+    loadUrgentTickets();
+}
+
 function refreshMessages() {
-    loadTicketList();
+    loadTicketListChat();
     if (currentTicketId) {
         loadTicketMessages(currentTicketId);
-        // Redémarrer le polling
         startPolling(currentTicketId);
     }
 }
+
 function filterTickets(query) {
     document.querySelectorAll('.ticket-item').forEach(item => {
         const text = item.textContent.toLowerCase();
@@ -503,6 +623,8 @@ window.refreshDashboard = refreshDashboard;
 window.refreshMessages = refreshMessages;
 window.filterTickets = filterTickets;
 window.openTicket = openTicket;
+window.applyFilters = applyFilters;
+window.loadTicketsPage = loadTicketsPage;
 
 // Nettoyer le polling quand on quitte la page
 window.addEventListener('beforeunload', function() {
