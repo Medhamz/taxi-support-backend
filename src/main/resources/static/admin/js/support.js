@@ -148,23 +148,32 @@ async function loadStats() {
         document.getElementById('statInProgress').textContent = stats.inProgressTickets || 0;
         document.getElementById('statResolved').textContent = stats.resolvedTickets || 0;
 
-        // ✅ Mettre à jour le badge "Tickets" dans la sidebar
+        // ✅ Mettre à jour le badge "Tickets" dans la sidebar (TOUJOURS visible)
         const openCountBadge = document.getElementById('openCount');
         if (openCountBadge) {
             const openCount = stats.openTickets || 0;
             openCountBadge.textContent = openCount;
-            // Optionnel : cacher le badge si 0
-            openCountBadge.style.display = openCount > 0 ? 'inline-block' : 'none';
+            // Toujours afficher le badge, même si c'est 0
+            openCountBadge.style.display = 'inline-block';
         }
 
-        // ✅ Mettre à jour le badge "Chat" dans la sidebar
-        // On compte les tickets en attente + en cours comme "actifs" pour le chat
+        // ✅ Mettre à jour le badge "Chat" dans la sidebar (TOUJOURS visible)
         const unreadCountBadge = document.getElementById('unreadCount');
         if (unreadCountBadge) {
+            // On compte les tickets en attente + en cours comme "actifs" pour le chat
             const activeTickets = (stats.openTickets || 0) + (stats.inProgressTickets || 0);
             unreadCountBadge.textContent = activeTickets;
-            unreadCountBadge.style.display = activeTickets > 0 ? 'inline-block' : 'none';
+            // Toujours afficher le badge, même si c'est 0
+            unreadCountBadge.style.display = 'inline-block';
         }
+
+        console.log('📊 Stats mises à jour:', {
+            total: stats.totalTickets,
+            open: stats.openTickets,
+            inProgress: stats.inProgressTickets,
+            resolved: stats.resolvedTickets,
+            activeChat: (stats.openTickets || 0) + (stats.inProgressTickets || 0)
+        });
 
     } catch (error) {
         console.error('Erreur chargement stats:', error);
@@ -302,7 +311,6 @@ async function loadTicketListTable() {
             return;
         }
 
-        // ✅ TABLEAU AVEC MENUS DÉROULANTS ET BOUTONS D'ACTION
         container.innerHTML = `
             <table class="table">
                 <thead>
@@ -356,7 +364,6 @@ async function loadTicketListTable() {
             </table>
         `;
 
-        // ✅ Écouteurs pour les changements de statut
         document.querySelectorAll('.status-select').forEach(select => {
             select.addEventListener('change', function() {
                 const ticketId = this.dataset.ticketId;
@@ -365,7 +372,6 @@ async function loadTicketListTable() {
             });
         });
 
-        // ✅ Écouteurs pour les changements de priorité
         document.querySelectorAll('.priority-select').forEach(select => {
             select.addEventListener('change', function() {
                 const ticketId = this.dataset.ticketId;
@@ -381,9 +387,6 @@ async function loadTicketListTable() {
 
 // ==================== GESTION DES TICKETS ====================
 
-/**
- * Supprimer un ticket
- */
 async function deleteTicket(ticketId) {
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce ticket ? Cette action est irréversible.')) {
         return;
@@ -408,9 +411,6 @@ async function deleteTicket(ticketId) {
     }
 }
 
-/**
- * Mettre à jour le statut d'un ticket
- */
 async function updateTicketStatus(ticketId, status) {
     try {
         const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/status-simple?status=${status}`, {
@@ -421,12 +421,11 @@ async function updateTicketStatus(ticketId, status) {
             showNotification(`Statut mis à jour vers ${getStatusLabel(status)}`, 'success');
             loadTicketListTable();
             loadStats();
-            // Mettre à jour l'affichage du badge si on est sur le dashboard
             loadUrgentTickets();
         } else {
             const errorText = await response.text();
             showNotification('Erreur lors de la mise à jour du statut: ' + errorText, 'danger');
-            loadTicketListTable(); // Recharger pour annuler le changement visuel
+            loadTicketListTable();
         }
     } catch (error) {
         console.error('Erreur:', error);
@@ -435,9 +434,6 @@ async function updateTicketStatus(ticketId, status) {
     }
 }
 
-/**
- * Mettre à jour la priorité d'un ticket
- */
 async function updateTicketPriority(ticketId, priority) {
     try {
         const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/priority?priority=${priority}`, {
@@ -460,9 +456,6 @@ async function updateTicketPriority(ticketId, priority) {
     }
 }
 
-/**
- * Afficher une notification
- */
 function showNotification(message, type = 'info') {
     const colors = {
         'success': '#2ED573',
@@ -471,7 +464,6 @@ function showNotification(message, type = 'info') {
         'info': '#6C63FF'
     };
 
-    // Créer l'élément de notification
     const notification = document.createElement('div');
     notification.style.cssText = `
         position: fixed;
@@ -490,10 +482,8 @@ function showNotification(message, type = 'info') {
     `;
     notification.innerHTML = message;
 
-    // Ajouter au DOM
     document.body.appendChild(notification);
 
-    // Supprimer après 3 secondes
     setTimeout(() => {
         notification.style.opacity = '0';
         notification.style.transition = 'opacity 0.3s ease';
@@ -505,7 +495,6 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Ajouter le style pour l'animation
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {
