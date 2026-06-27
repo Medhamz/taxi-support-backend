@@ -156,13 +156,12 @@ async function loadStats() {
             openCountBadge.style.display = 'inline-block';
         }
 
-        // ✅ BADGE "Chat" : Affiche le nombre de tickets NON FERMÉS
+        // ✅ BADGE "Chat" : Affiche uniquement les tickets EN ATTENTE (WAITING)
         const unreadCountBadge = document.getElementById('unreadCount');
         if (unreadCountBadge) {
-            // Total - Fermés = Tickets actifs (incluant résolus)
-            const closedTickets = stats.closedTickets || 0;
-            const activeTickets = (stats.totalTickets || 0) - closedTickets;
-            unreadCountBadge.textContent = activeTickets;
+            // On compte uniquement les tickets avec le statut WAITING
+            const waitingTickets = stats.waitingTickets || 0;
+            unreadCountBadge.textContent = waitingTickets;
             unreadCountBadge.style.display = 'inline-block';
         }
 
@@ -170,9 +169,10 @@ async function loadStats() {
             total: stats.totalTickets,
             open: stats.openTickets,
             inProgress: stats.inProgressTickets,
+            waiting: stats.waitingTickets,
             resolved: stats.resolvedTickets,
             closed: stats.closedTickets,
-            activeChat: (stats.totalTickets || 0) - (stats.closedTickets || 0)
+            chatCount: stats.waitingTickets || 0
         });
 
     } catch (error) {
