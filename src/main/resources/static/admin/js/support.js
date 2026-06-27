@@ -142,10 +142,29 @@ async function loadStats() {
         const response = await fetch(`${API_BASE_URL}/stats`);
         const stats = await response.json();
 
+        // Mettre à jour les chiffres dans le dashboard
         document.getElementById('statTotal').textContent = stats.totalTickets || 0;
         document.getElementById('statOpen').textContent = stats.openTickets || 0;
         document.getElementById('statInProgress').textContent = stats.inProgressTickets || 0;
         document.getElementById('statResolved').textContent = stats.resolvedTickets || 0;
+
+        // ✅ Mettre à jour le badge "Tickets" dans la sidebar
+        const openCountBadge = document.getElementById('openCount');
+        if (openCountBadge) {
+            const openCount = stats.openTickets || 0;
+            openCountBadge.textContent = openCount;
+            // Optionnel : cacher le badge si 0
+            openCountBadge.style.display = openCount > 0 ? 'inline-block' : 'none';
+        }
+
+        // ✅ Mettre à jour le badge "Chat" dans la sidebar
+        // On compte les tickets en attente + en cours comme "actifs" pour le chat
+        const unreadCountBadge = document.getElementById('unreadCount');
+        if (unreadCountBadge) {
+            const activeTickets = (stats.openTickets || 0) + (stats.inProgressTickets || 0);
+            unreadCountBadge.textContent = activeTickets;
+            unreadCountBadge.style.display = activeTickets > 0 ? 'inline-block' : 'none';
+        }
 
     } catch (error) {
         console.error('Erreur chargement stats:', error);
