@@ -156,11 +156,12 @@ async function loadStats() {
             openCountBadge.style.display = 'inline-block';
         }
 
-        // ✅ BADGE "Chat" : Affiche uniquement les tickets EN ATTENTE (WAITING)
+        // ✅ BADGE "Chat" : Affiche les tickets ouverts (OPEN + WAITING)
         const unreadCountBadge = document.getElementById('unreadCount');
         if (unreadCountBadge) {
-            const waitingTickets = stats.waitingTickets || 0;
-            unreadCountBadge.textContent = waitingTickets;
+            // Tickets ouverts = OPEN + WAITING (exclut IN_PROGRESS, RESOLVED, CLOSED)
+            const openTickets = (stats.openTickets || 0) + (stats.waitingTickets || 0);
+            unreadCountBadge.textContent = openTickets;
             unreadCountBadge.style.display = 'inline-block';
         }
 
@@ -171,7 +172,7 @@ async function loadStats() {
             waiting: stats.waitingTickets,
             resolved: stats.resolvedTickets,
             closed: stats.closedTickets,
-            chatCount: stats.waitingTickets || 0
+            chatCount: (stats.openTickets || 0) + (stats.waitingTickets || 0)
         });
 
     } catch (error) {
