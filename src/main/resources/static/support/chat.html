@@ -60,16 +60,15 @@
         <button onclick="sendMessage()"><i class="fas fa-paper-plane"></i> Envoyer</button>
     </div>
 
-    <div class="status" id="connectionStatus">🟡 Connexion en cours...</div>
+    <div class="status" id="connectionStatus">🟢 Connecté</div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/stomp.min.js"></script>
 <script>
-    let stompClient = null;
-    let isConnected = false;
+    const API_BASE_URL = 'https://taxi-support-backend.onrender.com/api/support';
     let userId = Math.floor(Math.random() * 10000);
     let defaultTicketId = 1;
+    let pollingInterval = null;
+    let lastMessageId = 0;
 
     const chatMessages = document.getElementById('chatMessages');
     const messageInput = document.getElementById('messageInput');
@@ -77,43 +76,91 @@
     const userTypeSelect = document.getElementById('userTypeSelect');
     const userNameDisplay = document.getElementById('userNameDisplay');
 
-    function connectWebSocket() {
+    // Démarrer le polling
+    function startPolling() {
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+        }
+        pollingInterval = setInterval(checkNewMessages, 2000);
+        // Premier chargement
+        loadMessages();
+    }
+
+    async function loadMessages() {
         try {
-            const socket = new SockJS('https://abdil-taxi-backend.onrender.com/ws-support');
-            stompClient = Stomp.over(socket);
-            stompClient.debug = null;
+            const response = await fetch(`${API_BASE_URL}/tickets/${defaultTicketId}`);
+            const ticket = await response.json();
 
-            stompClient.connect({}, function(frame) {
-                console.log('✅ Connecté au WebSocket');
-                isConnected = true;
-                statusEl.className = 'status online';
-                statusEl.innerHTML = '🟢 Connecté - Posez votre question ci-dessous';
-
-                stompClient.subscribe('/topic/ticket/' + defaultTicketId, function(message) {
-                    const data = JSON.parse(message.body);
-                    displayMessage(data);
-                });
-
-            }, function(error) {
-                console.error('❌ Erreur WebSocket:', error);
-                isConnected = false;
-                statusEl.className = 'status offline';
-                statusEl.innerHTML = '🔴 Déconnecté - Reconnexion en cours...';
-                setTimeout(connectWebSocket, 5000);
-            });
-
+            if (ticket.messages && ticket.messages.length > 0) {
+                lastMessageId = ticket.messages[ticket.messages.length - 1].id || 0;
+                displayMessages(ticket.messages);
+            }
         } catch (error) {
-            console.error('❌ Erreur SockJS:', error);
-            setTimeout(connectWebSocket, 5000);
+            console.error('Erreur chargement messages:', error);
         }
     }
 
-    function sendMessage() {
-        const message = messageInput.value.trim();
-        if (!message || !stompClient || !isConnected) {
-            if (!isConnected) alert('Connexion en cours, veuillez patienter...');
-            return;
+    function displayMessages(messages) {
+        // Supprimer les anciens messages sauf le message de bienvenue
+        const welcomeMsg = chatMessages.querySelector('.text-secondary');
+        chatMessages.innerHTML = '';
+        if (welcomeMsg) chatMessages.appendChild(welcomeMsg);
+
+        messages.forEach(msg => {
+            const isUser = msg.senderType === 'USER';
+            const div = document.createElement('div');
+            div.className = `message ${isUser ? 'user' : ''}`;
+            div.innerHTML = `
+                <div class="bubble">
+                    ${!isUser ? `<small class="text-warning d-block mb-1">${msg.senderName || 'Agent Support'}</small>` : ''}
+                    <p class="mb-0">${msg.content || msg.message}</p>
+                    <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
+                </div>
+            `;
+            chatMessages.appendChild(div);
+        });
+
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Supprimer le message de bienvenue
+        const welcome = chatMessages.querySelector('.text-secondary');
+        if (welcome) welcome.remove();
+    }
+
+    async function checkNewMessages() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/tickets/${defaultTicketId}`);
+            const ticket = await response.json();
+
+            if (!ticket.messages || ticket.messages.length === 0) return;
+
+            const lastMsg = ticket.messages[ticket.messages.length - 1];
+            if (lastMsg.id > lastMessageId) {
+                const newMessages = ticket.messages.filter(msg => msg.id > lastMessageId);
+                newMessages.forEach(msg => {
+                    const isUser = msg.senderType === 'USER';
+                    const div = document.createElement('div');
+                    div.className = `message ${isUser ? 'user' : ''}`;
+                    div.innerHTML = `
+                        <div class="bubble">
+                            ${!isUser ? `<small class="text-warning d-block mb-1">${msg.senderName || 'Agent Support'}</small>` : ''}
+                            <p class="mb-0">${msg.content || msg.message}</p>
+                            <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
+                        </div>
+                    `;
+                    chatMessages.appendChild(div);
+                });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                lastMessageId = lastMsg.id;
+            }
+        } catch (error) {
+            console.error('Erreur polling:', error);
         }
+    }
+
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message) return;
 
         const userType = userTypeSelect.value;
         const userName = userType === 'CLIENT' ? 'Client' : 'Chauffeur';
@@ -127,27 +174,27 @@
             messageType: 'TEXT'
         };
 
-        stompClient.send('/app/chat.sendMessage', {}, JSON.stringify(chatMessage));
-        messageInput.value = '';
-    }
+        try {
+            const response = await fetch(`${API_BASE_URL}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(chatMessage)
+            });
 
-    function displayMessage(message) {
-        const isUser = message.senderType === 'USER';
-        const div = document.createElement('div');
-        // Côté Client (chat.html), ses propres messages (USER) doivent aller à droite (.user)
-        div.className = `message ${isUser ? 'user' : ''}`;
-        div.innerHTML = `
-            <div class="bubble">
-                ${!isUser ? `<small class="text-warning d-block mb-1">${message.senderName || 'Agent Support'}</small>` : ''}
-                <p class="mb-0">${message.content || message.message || 'Message vide'}</p>
-                <div class="time">${new Date().toLocaleTimeString()}</div>
-            </div>
-        `;
-        chatMessages.appendChild(div);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        const welcomeMsg = chatMessages.querySelector('.text-secondary');
-        if (welcomeMsg) welcomeMsg.remove();
+            if (response.ok) {
+                messageInput.value = '';
+                // Recharger les messages
+                await loadMessages();
+            } else {
+                console.error('Erreur envoi message:', await response.text());
+                alert('Erreur lors de l\'envoi du message');
+            }
+        } catch (error) {
+            console.error('Erreur envoi message:', error);
+            alert('Erreur de connexion');
+        }
     }
 
     userTypeSelect.addEventListener('change', function() {
@@ -155,7 +202,15 @@
         userNameDisplay.textContent = labels[this.value] || 'Client';
     });
 
-    connectWebSocket();
+    // Nettoyer le polling
+    window.addEventListener('beforeunload', function() {
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+        }
+    });
+
+    // Démarrer
+    startPolling();
 </script>
 </body>
 </html>

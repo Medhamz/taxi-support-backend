@@ -1,16 +1,9 @@
 // Configuration
-const API_BASE_URL = 'https://abdil-taxi-backend.onrender.com/api/support';
-const WS_URL = 'https://abdil-taxi-backend.onrender.com/ws-support';
+const API_BASE_URL = 'https://taxi-support-backend.onrender.com/api/support';
 
-let stompClient = null;
 let currentTicketId = null;
-let currentUserId = null;
-let currentUserType = 'AGENT';
-let isConnected = false;
-
-// Variables pour mémoriser les abonnements et éviter les doublons
-let messageSubscription = null;
-let typingSubscription = null;
+let pollingInterval = null;
+let lastMessageId = 0;
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
@@ -29,10 +22,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Connect WebSocket
-    connectWebSocket();
-
-    // Charger les stats
     loadStats();
 });
 
@@ -81,7 +70,6 @@ function loadDashboard() {
             </div>
         </div>
 
-        <!-- Statistiques -->
         <div class="row g-3" id="statsRow">
             <div class="col-md-3 col-6">
                 <div class="stat-card">
@@ -137,23 +125,6 @@ function loadDashboard() {
             </div>
         </div>
 
-        <!-- Graphiques -->
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <div class="ticket-list">
-                    <h6 class="mb-3"><i class="fas fa-chart-bar text-primary"></i> Tickets par Catégorie</h6>
-                    <canvas id="categoryChart" height="200"></canvas>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="ticket-list">
-                    <h6 class="mb-3"><i class="fas fa-chart-line text-primary"></i> Évolution des Tickets</h6>
-                    <canvas id="trendChart" height="200"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tickets Urgents -->
         <div class="row mt-4">
             <div class="col-12">
                 <div class="ticket-list">
@@ -171,7 +142,6 @@ function loadDashboard() {
     `;
 
     loadStats();
-    loadCharts();
     loadUrgentTickets();
 }
 
@@ -186,51 +156,8 @@ async function loadStats() {
         document.getElementById('statInProgress').textContent = stats.inProgressTickets || stats.inProgress || 0;
         document.getElementById('statResolved').textContent = stats.resolvedTickets || stats.resolved || 0;
 
-        const countBadge = document.getElementById('openTicketsCount');
-        if (countBadge) countBadge.textContent = stats.openTickets || stats.open || 0;
-
     } catch (error) {
         console.error('Erreur chargement stats:', error);
-    }
-}
-
-// ==================== GRAPHIQUES ====================
-function loadCharts() {
-    const ctx1 = document.getElementById('categoryChart');
-    if (ctx1) {
-        new Chart(ctx1, {
-            type: 'doughnut',
-            data: {
-                labels: ['Paiement', 'Course', 'Compte', 'Technique', 'Chauffeur', 'Autre'],
-                datasets: [{
-                    data: [12, 19, 8, 15, 7, 5],
-                    backgroundColor: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD']
-                }]
-            },
-            options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#fff' } } } }
-        });
-    }
-
-    const ctx2 = document.getElementById('trendChart');
-    if (ctx2) {
-        new Chart(ctx2, {
-            type: 'line',
-            data: {
-                labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
-                datasets: [{
-                    label: 'Nouveaux tickets',
-                    data: [5, 8, 6, 12, 15, 7, 4],
-                    borderColor: '#6C63FF',
-                    backgroundColor: 'rgba(108, 99, 255, 0.1)',
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { labels: { color: '#fff' } } },
-                scales: { y: { ticks: { color: '#a0aec0' } }, x: { ticks: { color: '#a0aec0' } } }
-            }
-        });
     }
 }
 
@@ -347,15 +274,9 @@ function loadMessagesPage() {
                         <!-- Messages -->
                     </div>
 
-                    <div id="typingIndicator" class="typing-indicator mt-2" style="display: none;">
-                        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-                        <span class="ms-2 text-secondary" id="typingText">L'utilisateur écrit...</span>
-                    </div>
-
                     <div id="chatInput" style="display: none;" class="mt-3">
                         <div class="d-flex gap-2">
                             <input type="text" class="form-control" id="messageInput" placeholder="Écrivez votre message..."
-                                   onkeyup="sendTypingIndicator()"
                                    onkeypress="if(event.key==='Enter' && !event.shiftKey){sendMessage();event.preventDefault();}">
                             <button class="btn btn-primary" onclick="sendMessage()">
                                 <i class="fas fa-paper-plane"></i>
@@ -412,7 +333,8 @@ function selectTicket(ticketId) {
     const activeItem = document.querySelector(`.ticket-item[data-ticket-id="${ticketId}"]`);
     if (activeItem) activeItem.classList.add('border', 'border-primary');
 
-    subscribeToTicketChannel(ticketId);
+    // Démarrer le polling pour ce ticket
+    startPolling(ticketId);
 }
 
 // ==================== CHARGEMENT DES MESSAGES API ====================
@@ -438,11 +360,17 @@ async function loadTicketMessages(ticketId) {
                 return;
             }
 
+            // Mettre à jour lastMessageId pour le polling
+            if (ticket.messages.length > 0) {
+                lastMessageId = ticket.messages[ticket.messages.length - 1].id || 0;
+            }
+
             container.innerHTML = ticket.messages.map(msg => {
                 const isUser = msg.senderType === 'USER';
                 return `
                     <div class="message ${isUser ? '' : 'user'}">
                         <div class="bubble">
+                            ${!isUser ? `<small class="text-warning d-block mb-1">${msg.senderName || 'Agent Support'}</small>` : ''}
                             <p class="mb-0">${msg.content || msg.message}</p>
                             <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
                         </div>
@@ -456,117 +384,110 @@ async function loadTicketMessages(ticketId) {
     }
 }
 
-// ==================== ENVOYER UN MESSAGE VIA WEBSOCKET ====================
-function sendMessage() {
+// ==================== POLLING POUR NOUVEAUX MESSAGES ====================
+function startPolling(ticketId) {
+    // Arrêter l'ancien polling
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+
+    // Démarrer le nouveau polling (toutes les 2 secondes)
+    pollingInterval = setInterval(() => {
+        checkNewMessages(ticketId);
+    }, 2000);
+}
+
+async function checkNewMessages(ticketId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}`);
+        const ticket = await response.json();
+
+        if (!ticket.messages || ticket.messages.length === 0) return;
+
+        const lastMsg = ticket.messages[ticket.messages.length - 1];
+        if (lastMsg.id > lastMessageId) {
+            // Nouveaux messages ! Les afficher
+            const container = document.getElementById('chatContainer');
+            if (container) {
+                // Supprimer le message "Aucun message" s'il existe
+                const emptyMsg = container.querySelector('.text-secondary');
+                if (emptyMsg) emptyMsg.remove();
+
+                // Ajouter les nouveaux messages
+                const newMessages = ticket.messages.filter(msg => msg.id > lastMessageId);
+                newMessages.forEach(msg => {
+                    const isUser = msg.senderType === 'USER';
+                    const div = document.createElement('div');
+                    div.className = `message ${isUser ? '' : 'user'}`;
+                    div.innerHTML = `
+                        <div class="bubble">
+                            ${!isUser ? `<small class="text-warning d-block mb-1">${msg.senderName || 'Agent Support'}</small>` : ''}
+                            <p class="mb-0">${msg.content || msg.message}</p>
+                            <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+                container.scrollTop = container.scrollHeight;
+
+                // Mettre à jour lastMessageId
+                lastMessageId = lastMsg.id;
+            }
+        }
+    } catch (error) {
+        console.error('Erreur polling messages:', error);
+    }
+}
+
+// ==================== ENVOYER UN MESSAGE ====================
+async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
 
-    if (!message || !currentTicketId || !isConnected) return;
+    if (!message || !currentTicketId) return;
 
-    const chatMessage = {
-        ticketId: currentTicketId,
-        senderId: 1,
-        senderType: 'AGENT',
-        senderName: 'Support Agent',
-        content: message,
-        messageType: 'TEXT'
-    };
-
-    stompClient.send('/app/chat.sendMessage', {}, JSON.stringify(chatMessage));
-    input.value = '';
-}
-
-// ==================== WEB SOCKET - SYSTEM ====================
-function connectWebSocket() {
     try {
-        const socket = new SockJS(WS_URL);
-        stompClient = Stomp.over(socket);
-        stompClient.debug = null;
+        const chatMessage = {
+            ticketId: currentTicketId,
+            senderId: 1,
+            senderType: 'AGENT',
+            senderName: 'Support Agent',
+            content: message,
+            messageType: 'TEXT'
+        };
 
-        stompClient.connect({}, function(frame) {
-            console.log('✅ WebSocket connecté au Tableau de Bord !');
-            isConnected = true;
-
-            if (currentTicketId) {
-                subscribeToTicketChannel(currentTicketId);
-            }
-        }, function(error) {
-            console.error('❌ Erreur WebSocket:', error);
-            isConnected = false;
-            setTimeout(connectWebSocket, 5000);
+        const response = await fetch(`${API_BASE_URL}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(chatMessage)
         });
 
+        if (response.ok) {
+            input.value = '';
+            // Recharger les messages pour voir le nouveau message
+            await loadTicketMessages(currentTicketId);
+        } else {
+            console.error('Erreur envoi message:', await response.text());
+            alert('Erreur lors de l\'envoi du message');
+        }
     } catch (error) {
-        console.error('Erreur initialisation SockJS:', error);
-    }
-}
-
-function subscribeToTicketChannel(ticketId) {
-    if (!stompClient || !isConnected) return;
-
-    if (messageSubscription) messageSubscription.unsubscribe();
-    if (typingSubscription) typingSubscription.unsubscribe();
-
-    messageSubscription = stompClient.subscribe('/topic/ticket/' + ticketId, function(response) {
-        const msg = JSON.parse(response.body);
-        const container = document.getElementById('chatContainer');
-        if (container && currentTicketId === msg.ticketId) {
-
-            const emptyText = container.querySelector('.text-secondary');
-            if (emptyText) emptyText.remove();
-
-            const isUser = msg.senderType === 'USER';
-            const div = document.createElement('div');
-            // Côté Agent (support.js), les messages de l'user (client) vont à gauche (classe message seule)
-            // et ceux de l'agent vont à droite (classe message user)
-            div.className = `message ${isUser ? '' : 'user'}`;
-            div.innerHTML = `
-                <div class="bubble">
-                    <p class="mb-0">${msg.content || msg.message}</p>
-                    <div class="time">${new Date().toLocaleTimeString()}</div>
-                </div>
-            `;
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-        }
-    });
-
-    typingSubscription = stompClient.subscribe('/topic/ticket/' + ticketId + '/typing', function(response) {
-        const data = JSON.parse(response.body);
-        if (data.senderType === 'USER') {
-            showTypingIndicator(data.userName || 'L\'utilisateur');
-        }
-    });
-}
-
-// ==================== INDICATEUR DE FRAPPE ====================
-let typingTimeout = null;
-function sendTypingIndicator() {
-    if (stompClient && isConnected && currentTicketId) {
-        stompClient.send('/app/chat.typing', {}, JSON.stringify({
-            ticketId: currentTicketId,
-            userName: 'Agent Support',
-            senderType: 'AGENT'
-        }));
-    }
-}
-
-function showTypingIndicator(userName) {
-    const indicator = document.getElementById('typingIndicator');
-    const text = document.getElementById('typingText');
-    if (indicator && text) {
-        text.textContent = `${userName} écrit...`;
-        indicator.style.display = 'block';
-
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-            indicator.style.display = 'none';
-        }, 2500);
+        console.error('Erreur envoi message:', error);
+        alert('Erreur de connexion');
     }
 }
 
 function refreshDashboard() { loadStats(); loadUrgentTickets(); }
-function refreshMessages() { loadTicketList(); if (currentTicketId) loadTicketMessages(currentTicketId); }
+function refreshMessages() {
+    loadTicketList();
+    if (currentTicketId) {
+        loadTicketMessages(currentTicketId);
+        // Redémarrer le polling
+        startPolling(currentTicketId);
+    }
+}
 function filterTickets(query) {
     document.querySelectorAll('.ticket-item').forEach(item => {
         const text = item.textContent.toLowerCase();
@@ -581,4 +502,11 @@ window.sendMessage = sendMessage;
 window.refreshDashboard = refreshDashboard;
 window.refreshMessages = refreshMessages;
 window.filterTickets = filterTickets;
-window.sendTypingIndicator = sendTypingIndicator;
+window.openTicket = openTicket;
+
+// Nettoyer le polling quand on quitte la page
+window.addEventListener('beforeunload', function() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+    }
+});
