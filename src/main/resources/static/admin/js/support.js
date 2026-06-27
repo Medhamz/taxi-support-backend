@@ -1,6 +1,6 @@
 // Configuration
-const API_BASE_URL = 'https://taxi-support-backend.onrender.com/api/support';
-const WS_URL = 'https://taxi-support-backend.onrender.com/ws-support';
+const API_BASE_URL = 'https://abdil-taxi-backend.onrender.com/api/support';
+const WS_URL = 'https://abdil-taxi-backend.onrender.com/ws-support';
 
 let stompClient = null;
 let currentTicketId = null;

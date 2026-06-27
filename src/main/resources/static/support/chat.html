@@ -79,7 +79,7 @@
 
     function connectWebSocket() {
         try {
-            const socket = new SockJS('https://taxi-support-backend.onrender.com/ws-support');
+            const socket = new SockJS('https://abdil-taxi-backend.onrender.com/ws-support');
             stompClient = Stomp.over(socket);
             stompClient.debug = null;
 
