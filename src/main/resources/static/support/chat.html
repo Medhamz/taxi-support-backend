@@ -33,6 +33,120 @@
         .loading { color: #FFA502; }
         .error { color: #FF4757; }
         .small-text { font-size: 12px; color: #6c757d; }
+
+        /* ===== MODAL DE SÉLECTION DE TICKET ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #141833;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            border: 1px solid rgba(255,255,255,0.1);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-content h3 {
+            color: #6C63FF;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .modal-content p {
+            color: #a0aec0;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .ticket-list-modal {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+        .ticket-list-modal li {
+            padding: 12px 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .ticket-list-modal li:hover {
+            background: rgba(108,99,255,0.15);
+            border-left-color: #6C63FF;
+        }
+        .ticket-list-modal li .ticket-status {
+            font-size: 12px;
+            padding: 2px 10px;
+            border-radius: 12px;
+        }
+        .ticket-list-modal li .ticket-status.resolved {
+            background: rgba(46, 213, 115, 0.2);
+            color: #2ED573;
+        }
+        .ticket-list-modal li .ticket-status.open {
+            background: rgba(255, 165, 2, 0.2);
+            color: #FFA502;
+        }
+        .ticket-list-modal li .ticket-status.closed {
+            background: rgba(160, 174, 192, 0.2);
+            color: #a0aec0;
+        }
+        .btn-modal {
+            padding: 10px 25px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .btn-primary-custom {
+            background: #6C63FF;
+            color: #fff;
+        }
+        .btn-primary-custom:hover {
+            background: #5a52d5;
+        }
+        .btn-secondary-custom {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .btn-secondary-custom:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .btn-success-custom {
+            background: #2ED573;
+            color: #000;
+        }
+        .btn-success-custom:hover {
+            background: #26b865;
+        }
+        .modal-divider {
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin: 20px 0;
+        }
+        .text-muted-modal {
+            color: #6c757d;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -40,7 +154,7 @@
     <div class="chat-header">
         <h2><i class="fas fa-headset"></i> Support Client</h2>
         <p class="text-secondary">Une question ? Un problème ? Nous sommes là pour vous aider !</p>
-        <div class="ticket-id" id="ticketIdDisplay">🔄 Création du ticket...</div>
+        <div class="ticket-id" id="ticketIdDisplay">🔄 Chargement...</div>
     </div>
 
     <div class="user-info">
@@ -78,14 +192,74 @@
     <div class="small-text text-center mt-2">Ticket #<span id="ticketNumberDisplay">-</span></div>
 </div>
 
+<!-- ===== MODAL DE SÉLECTION DE TICKET ===== -->
+<div class="modal-overlay" id="ticketModal">
+    <div class="modal-content">
+        <h3><i class="fas fa-comment-dots"></i> Vos conversations</h3>
+        <p>Choisissez une conversation existante ou créez-en une nouvelle.</p>
+
+        <div id="modalTicketList">
+            <div class="text-center text-secondary py-3">
+                <i class="fas fa-spinner fa-spin"></i> Chargement de vos tickets...
+            </div>
+        </div>
+
+        <hr class="modal-divider">
+
+        <button class="btn-modal btn-success-custom" id="btnNewTicket">
+            <i class="fas fa-plus-circle"></i> Créer un nouveau ticket
+        </button>
+
+        <button class="btn-modal btn-secondary-custom mt-2" id="btnRefreshTickets">
+            <i class="fas fa-sync-alt"></i> Rafraîchir la liste
+        </button>
+    </div>
+</div>
+
 <script>
     const API_BASE_URL = 'https://taxi-support-backend.onrender.com/api/support';
 
-    let userId = Math.floor(Math.random() * 999000) + 1000;
+    // ============================================
+    // GESTION DE L'UTILISATEUR (localStorage)
+    // ============================================
+
+    function getOrCreateUserId() {
+        let storedUserId = localStorage.getItem('support_user_id');
+        if (!storedUserId) {
+            storedUserId = Math.floor(Math.random() * 999000) + 1000;
+            localStorage.setItem('support_user_id', storedUserId);
+            console.log('🆕 Nouvel utilisateur créé:', storedUserId);
+        } else {
+            console.log('👤 Utilisateur existant:', storedUserId);
+        }
+        return parseInt(storedUserId);
+    }
+
+    function getUserInfo() {
+        try {
+            const info = localStorage.getItem('support_user_info');
+            return info ? JSON.parse(info) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function saveUserInfo(name, email, phone, userType) {
+        const info = { name, email, phone, userType };
+        localStorage.setItem('support_user_info', JSON.stringify(info));
+    }
+
+    // ============================================
+    // VARIABLES GLOBALES
+    // ============================================
+
+    let userId = getOrCreateUserId();
     let defaultTicketId = null;
     let pollingInterval = null;
     let lastMessageId = 0;
     let isCreatingTicket = false;
+    let userTickets = [];
+    let selectedTicketId = null;
 
     const chatMessages = document.getElementById('chatMessages');
     const messageInput = document.getElementById('messageInput');
@@ -96,40 +270,147 @@
     const ticketNumberDisplay = document.getElementById('ticketNumberDisplay');
     const userEmailInput = document.getElementById('userEmailInput');
     const userPhoneInput = document.getElementById('userPhoneInput');
+    const modalOverlay = document.getElementById('ticketModal');
+    const modalTicketList = document.getElementById('modalTicketList');
+
+    // Restaurer les informations utilisateur
+    const savedInfo = getUserInfo();
+    if (savedInfo) {
+        if (savedInfo.name) userNameDisplay.textContent = savedInfo.name;
+        if (savedInfo.email) userEmailInput.value = savedInfo.email;
+        if (savedInfo.phone) userPhoneInput.value = savedInfo.phone;
+        if (savedInfo.userType) userTypeSelect.value = savedInfo.userType;
+    }
 
     console.log('👤 ID Utilisateur:', userId);
 
-    // ✅ Fonction pour obtenir le texte du message
-    function getMessageText(msg) {
-        // Vérifier tous les champs possibles
-        const fields = ['message', 'content', 'text', 'body', 'msg'];
+    // ============================================
+    // FONCTIONS PRINCIPALES
+    // ============================================
 
+    function getMessageText(msg) {
+        const fields = ['message', 'content', 'text', 'body', 'msg'];
         for (const field of fields) {
             if (msg[field] && typeof msg[field] === 'string' &&
                 msg[field].trim() !== '' &&
                 msg[field] !== 'null' &&
                 msg[field] !== 'undefined') {
-                console.log('✅ Message trouvé dans:', field, '=', msg[field]);
                 return msg[field];
             }
         }
-
-        console.warn('⚠️ Aucun champ de message trouvé dans:', msg);
         return 'Message';
     }
 
-    // ✅ Créer un ticket
-    async function createTicket() {
+    function getStatusLabel(status) {
+        const labels = { 'OPEN': 'Ouvert', 'IN_PROGRESS': 'En cours', 'WAITING': 'En attente', 'RESOLVED': 'Résolu', 'CLOSED': 'Fermé' };
+        return labels[status] || status;
+    }
+
+    function getStatusClass(status) {
+        const classes = {
+            'OPEN': 'open',
+            'IN_PROGRESS': 'open',
+            'WAITING': 'open',
+            'RESOLVED': 'resolved',
+            'CLOSED': 'closed'
+        };
+        return classes[status] || '';
+    }
+
+    // ============================================
+    // RÉCUPÉRATION DES TICKETS DE L'UTILISATEUR
+    // ============================================
+
+    async function fetchUserTickets() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/tickets/user/${userId}`);
+            if (!response.ok) return [];
+            const tickets = await response.json();
+            // Filtrer pour ne garder que les tickets avec des messages ou récents
+            return tickets;
+        } catch (error) {
+            console.error('Erreur récupération tickets:', error);
+            return [];
+        }
+    }
+
+    // ============================================
+    // AFFICHAGE DU MODAL DE SÉLECTION
+    // ============================================
+
+    async function showTicketSelectionModal() {
+        modalOverlay.classList.add('active');
+        modalTicketList.innerHTML = `
+            <div class="text-center text-secondary py-3">
+                <i class="fas fa-spinner fa-spin"></i> Chargement de vos tickets...
+            </div>
+        `;
+
+        userTickets = await fetchUserTickets();
+
+        if (!userTickets || userTickets.length === 0) {
+            modalTicketList.innerHTML = `
+                <div class="text-center text-secondary py-4">
+                    <i class="fas fa-inbox fa-2x mb-2 d-block opacity-25"></i>
+                    <p>Aucune conversation existante.</p>
+                    <p class="text-muted-modal">Créez un nouveau ticket ci-dessous.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Trier par date décroissante
+        userTickets.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        modalTicketList.innerHTML = `
+            <ul class="ticket-list-modal">
+                ${userTickets.map(ticket => `
+                    <li onclick="selectTicketFromModal(${ticket.id})" data-ticket-id="${ticket.id}">
+                        <div>
+                            <strong>#${ticket.ticketNumber || ticket.id}</strong>
+                            <span class="text-muted-modal"> - ${ticket.subject || 'Sans sujet'}</span>
+                            <br>
+                            <small class="text-muted-modal">${new Date(ticket.createdAt).toLocaleDateString()} à ${new Date(ticket.createdAt).toLocaleTimeString()}</small>
+                        </div>
+                        <span class="ticket-status ${getStatusClass(ticket.status)}">${getStatusLabel(ticket.status)}</span>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+    }
+
+    // ============================================
+    // SÉLECTION D'UN TICKET
+    // ============================================
+
+    function selectTicketFromModal(ticketId) {
+        modalOverlay.classList.remove('active');
+        defaultTicketId = ticketId;
+        ticketIdDisplay.textContent = `Ticket #${defaultTicketId}`;
+        ticketIdDisplay.className = 'ticket-id';
+        ticketNumberDisplay.textContent = defaultTicketId;
+        startPolling();
+    }
+
+    // ============================================
+    // CRÉATION D'UN NOUVEAU TICKET
+    // ============================================
+
+    async function createNewTicket() {
         if (isCreatingTicket) return;
         isCreatingTicket = true;
 
         try {
+            modalOverlay.classList.remove('active');
+
             const userType = userTypeSelect.value;
             const userName = userType === 'CLIENT' ? 'Client' : 'Chauffeur';
             const userEmail = userEmailInput.value.trim() || null;
             const userPhone = userPhoneInput.value.trim() || null;
 
-            console.log('🆕 Création d\'un nouveau ticket...');
+            // Sauvegarder les infos utilisateur
+            saveUserInfo(userName, userEmail, userPhone, userType);
+
             ticketIdDisplay.textContent = '⏳ Création en cours...';
             ticketIdDisplay.className = 'ticket-id loading';
 
@@ -145,8 +426,6 @@
                 priority: 'MEDIUM'
             };
 
-            console.log('📤 Envoi de la requête:', ticketRequest);
-
             const response = await fetch(`${API_BASE_URL}/tickets`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -155,13 +434,11 @@
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('❌ Erreur création ticket:', errorText);
-                throw new Error('Erreur création ticket: ' + response.status);
+                throw new Error('Erreur création ticket: ' + response.status + ' - ' + errorText);
             }
 
             const newTicket = await response.json();
             defaultTicketId = newTicket.id;
-            console.log('✅ Ticket créé avec ID:', defaultTicketId);
             ticketIdDisplay.textContent = `✅ Ticket #${defaultTicketId}`;
             ticketIdDisplay.className = 'ticket-id';
             ticketNumberDisplay.textContent = defaultTicketId;
@@ -177,38 +454,17 @@
         }
     }
 
-    // ✅ Récupérer les tickets existants
-    async function getExistingTickets() {
-        try {
-            const response = await fetch(`${API_BASE_URL}/tickets/user/${userId}`);
-            if (!response.ok) return false;
+    // ============================================
+    // POLLING ET MESSAGES
+    // ============================================
 
-            const tickets = await response.json();
-
-            if (tickets && tickets.length > 0) {
-                defaultTicketId = tickets[0].id;
-                console.log('✅ Ticket existant trouvé:', defaultTicketId);
-                ticketIdDisplay.textContent = `Ticket #${defaultTicketId}`;
-                ticketIdDisplay.className = 'ticket-id';
-                ticketNumberDisplay.textContent = defaultTicketId;
-                startPolling();
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('Erreur récupération tickets:', error);
-            return false;
-        }
-    }
-
-    // Démarrer le polling
     function startPolling() {
         if (pollingInterval) {
             clearInterval(pollingInterval);
         }
         loadMessages();
         pollingInterval = setInterval(checkNewMessages, 2000);
-        console.log('🔄 Polling démarré');
+        console.log('🔄 Polling démarré pour le ticket', defaultTicketId);
     }
 
     async function loadMessages() {
@@ -220,6 +476,11 @@
 
             const ticket = await response.json();
             console.log('📥 Ticket chargé:', ticket);
+
+            // Mettre à jour le statut du ticket dans l'en-tête
+            const statusLabel = getStatusLabel(ticket.status);
+            const statusClass = getStatusClass(ticket.status);
+            ticketIdDisplay.innerHTML = `Ticket #${defaultTicketId} <span class="ticket-status ${statusClass}" style="font-size:12px;padding:2px 12px;border-radius:12px;">${statusLabel}</span>`;
 
             if (ticket.messages && ticket.messages.length > 0) {
                 lastMessageId = ticket.messages[ticket.messages.length - 1].id || 0;
@@ -255,7 +516,6 @@
             const isUser = msg.senderType === 'USER';
             const div = document.createElement('div');
             div.className = `message ${isUser ? 'user' : ''}`;
-
             const messageText = getMessageText(msg);
 
             div.innerHTML = `
@@ -296,7 +556,6 @@
                     const isUser = msg.senderType === 'USER';
                     const div = document.createElement('div');
                     div.className = `message ${isUser ? 'user' : ''}`;
-
                     const messageText = getMessageText(msg);
 
                     div.innerHTML = `
@@ -316,7 +575,10 @@
         }
     }
 
-    // ✅ CORRECTION : Utiliser "message" au lieu de "content"
+    // ============================================
+    // ENVOYER UN MESSAGE
+    // ============================================
+
     async function sendMessage() {
         const message = messageInput.value.trim();
         if (!message) {
@@ -332,9 +594,8 @@
         const userType = userTypeSelect.value;
         const userName = userType === 'CLIENT' ? 'Client' : 'Chauffeur';
 
-        // ✅ CHANGEMENT ICI : Utiliser "message" au lieu de "content"
         const messageRequest = {
-            message: message,  // ← Changé de "content" à "message"
+            message: message,
             senderId: userId,
             senderType: 'USER',
             senderName: userName,
@@ -342,8 +603,6 @@
         };
 
         try {
-            console.log('📤 Envoi du message:', messageRequest);
-
             const response = await fetch(`${API_BASE_URL}/tickets/${defaultTicketId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -366,22 +625,62 @@
         }
     }
 
+    // ============================================
+    // ÉVÉNEMENTS
+    // ============================================
+
     userTypeSelect.addEventListener('change', function() {
         const labels = { 'CLIENT': 'Client', 'DRIVER': 'Chauffeur' };
-        userNameDisplay.textContent = labels[this.value] || 'Client';
+        const name = labels[this.value] || 'Client';
+        userNameDisplay.textContent = name;
+        // Sauvegarder
+        const info = getUserInfo() || {};
+        info.name = name;
+        info.userType = this.value;
+        saveUserInfo(info.name, info.email, info.phone, info.userType);
     });
 
-    // ✅ Initialisation
+    userEmailInput.addEventListener('change', function() {
+        const info = getUserInfo() || {};
+        info.email = this.value;
+        saveUserInfo(info.name, info.email, info.phone, info.userType);
+    });
+
+    userPhoneInput.addEventListener('change', function() {
+        const info = getUserInfo() || {};
+        info.phone = this.value;
+        saveUserInfo(info.name, info.email, info.phone, info.userType);
+    });
+
+    // Boutons du modal
+    document.getElementById('btnNewTicket').addEventListener('click', createNewTicket);
+    document.getElementById('btnRefreshTickets').addEventListener('click', function() {
+        showTicketSelectionModal();
+    });
+
+    // ============================================
+    // INITIALISATION
+    // ============================================
+
     async function init() {
         console.log('🚀 Initialisation du chat...');
+        console.log('👤 ID Utilisateur:', userId);
 
         try {
-            const hasExisting = await getExistingTickets();
-            if (!hasExisting) {
-                await createTicket();
+            // Récupérer les tickets existants
+            const tickets = await fetchUserTickets();
+
+            if (tickets && tickets.length > 0) {
+                // Afficher le modal de sélection
+                await showTicketSelectionModal();
+            } else {
+                // Aucun ticket, créer directement
+                await createNewTicket();
             }
         } catch (error) {
             console.error('❌ Erreur initialisation:', error);
+            // En cas d'erreur, proposer de créer un ticket
+            await createNewTicket();
         }
     }
 
@@ -391,6 +690,7 @@
         }
     });
 
+    // Démarrer
     init();
 </script>
 </body>
