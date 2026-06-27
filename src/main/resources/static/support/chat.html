@@ -33,7 +33,6 @@
         .loading { color: #FFA502; }
         .error { color: #FF4757; }
         .small-text { font-size: 12px; color: #6c757d; }
-        .debug-log { font-size: 10px; color: #6c757d; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; margin-top: 5px; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -77,13 +76,11 @@
 
     <div class="status" id="connectionStatus">🟢 Connecté</div>
     <div class="small-text text-center mt-2">Ticket #<span id="ticketNumberDisplay">-</span></div>
-    <div id="debugLog" class="debug-log text-center mt-2"></div>
 </div>
 
 <script>
     const API_BASE_URL = 'https://taxi-support-backend.onrender.com/api/support';
 
-    // ✅ Générer un ID utilisateur valide (entre 1000 et 999999)
     let userId = Math.floor(Math.random() * 999000) + 1000;
     let defaultTicketId = null;
     let pollingInterval = null;
@@ -99,39 +96,29 @@
     const ticketNumberDisplay = document.getElementById('ticketNumberDisplay');
     const userEmailInput = document.getElementById('userEmailInput');
     const userPhoneInput = document.getElementById('userPhoneInput');
-    const debugLog = document.getElementById('debugLog');
-
-    function logDebug(message) {
-        console.log(message);
-        debugLog.textContent = message;
-    }
 
     console.log('👤 ID Utilisateur:', userId);
 
-    // ✅ Fonction pour obtenir le texte du message (évite les null)
+    // ✅ Fonction pour obtenir le texte du message
     function getMessageText(msg) {
-        logDebug('📝 getMessageText: ' + JSON.stringify(msg));
+        // Vérifier tous les champs possibles
+        const fields = ['message', 'content', 'text', 'body', 'msg'];
 
-        // Essayer différents champs possibles
-        const possibleFields = ['message', 'content', 'text', 'body', 'msg'];
-
-        for (const field of possibleFields) {
-            if (msg[field] && msg[field] !== 'null' && msg[field] !== 'undefined' && msg[field].trim() !== '') {
-                logDebug('✅ Trouvé dans: ' + field + ' = ' + msg[field]);
+        for (const field of fields) {
+            if (msg[field] && typeof msg[field] === 'string' &&
+                msg[field].trim() !== '' &&
+                msg[field] !== 'null' &&
+                msg[field] !== 'undefined') {
+                console.log('✅ Message trouvé dans:', field, '=', msg[field]);
                 return msg[field];
             }
         }
 
-        // Si on a un objet message avec un champ message
-        if (msg.message && typeof msg.message === 'object') {
-            return getMessageText(msg.message);
-        }
-
-        logDebug('⚠️ Aucun champ trouvé, retourne "Message"');
+        console.warn('⚠️ Aucun champ de message trouvé dans:', msg);
         return 'Message';
     }
 
-    // ✅ Créer un ticket avec l'API existante
+    // ✅ Créer un ticket
     async function createTicket() {
         if (isCreatingTicket) return;
         isCreatingTicket = true;
@@ -142,7 +129,7 @@
             const userEmail = userEmailInput.value.trim() || null;
             const userPhone = userPhoneInput.value.trim() || null;
 
-            logDebug('🆕 Création d\'un nouveau ticket...');
+            console.log('🆕 Création d\'un nouveau ticket...');
             ticketIdDisplay.textContent = '⏳ Création en cours...';
             ticketIdDisplay.className = 'ticket-id loading';
 
@@ -158,58 +145,49 @@
                 priority: 'MEDIUM'
             };
 
-            logDebug('📤 Envoi de la requête: ' + JSON.stringify(ticketRequest));
+            console.log('📤 Envoi de la requête:', ticketRequest);
 
             const response = await fetch(`${API_BASE_URL}/tickets`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(ticketRequest)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                logDebug('❌ Erreur création ticket: ' + errorText);
-                throw new Error('Erreur création ticket: ' + response.status + ' - ' + errorText);
+                console.error('❌ Erreur création ticket:', errorText);
+                throw new Error('Erreur création ticket: ' + response.status);
             }
 
             const newTicket = await response.json();
             defaultTicketId = newTicket.id;
-            logDebug('✅ Ticket créé avec ID: ' + defaultTicketId);
+            console.log('✅ Ticket créé avec ID:', defaultTicketId);
             ticketIdDisplay.textContent = `✅ Ticket #${defaultTicketId}`;
             ticketIdDisplay.className = 'ticket-id';
             ticketNumberDisplay.textContent = defaultTicketId;
 
-            // Démarrer le polling après création
             startPolling();
 
         } catch (error) {
-            logDebug('❌ Erreur createTicket: ' + error.message);
+            console.error('❌ Erreur createTicket:', error);
             ticketIdDisplay.textContent = '❌ Erreur - Rechargez la page';
             ticketIdDisplay.className = 'ticket-id error';
-            statusEl.className = 'status offline';
-            statusEl.innerHTML = '🔴 Erreur: ' + error.message;
         } finally {
             isCreatingTicket = false;
         }
     }
 
-    // ✅ Récupérer les tickets existants pour cet utilisateur
+    // ✅ Récupérer les tickets existants
     async function getExistingTickets() {
         try {
             const response = await fetch(`${API_BASE_URL}/tickets/user/${userId}`);
-
-            if (!response.ok) {
-                logDebug('Aucun ticket existant pour cet utilisateur');
-                return false;
-            }
+            if (!response.ok) return false;
 
             const tickets = await response.json();
 
             if (tickets && tickets.length > 0) {
                 defaultTicketId = tickets[0].id;
-                logDebug('✅ Ticket existant trouvé: ' + defaultTicketId);
+                console.log('✅ Ticket existant trouvé:', defaultTicketId);
                 ticketIdDisplay.textContent = `Ticket #${defaultTicketId}`;
                 ticketIdDisplay.className = 'ticket-id';
                 ticketNumberDisplay.textContent = defaultTicketId;
@@ -218,7 +196,7 @@
             }
             return false;
         } catch (error) {
-            logDebug('Erreur récupération tickets: ' + error.message);
+            console.error('Erreur récupération tickets:', error);
             return false;
         }
     }
@@ -230,26 +208,18 @@
         }
         loadMessages();
         pollingInterval = setInterval(checkNewMessages, 2000);
-        logDebug('🔄 Polling démarré pour le ticket ' + defaultTicketId);
+        console.log('🔄 Polling démarré');
     }
 
     async function loadMessages() {
-        if (!defaultTicketId) {
-            logDebug('⏳ En attente du ticket...');
-            return;
-        }
+        if (!defaultTicketId) return;
 
         try {
-            logDebug('📥 Chargement des messages pour le ticket ' + defaultTicketId);
             const response = await fetch(`${API_BASE_URL}/tickets/${defaultTicketId}`);
-
-            if (!response.ok) {
-                logDebug('Erreur chargement messages: ' + response.status);
-                return;
-            }
+            if (!response.ok) return;
 
             const ticket = await response.json();
-            logDebug('📥 Ticket reçu: ' + JSON.stringify(ticket).substring(0, 200));
+            console.log('📥 Ticket chargé:', ticket);
 
             if (ticket.messages && ticket.messages.length > 0) {
                 lastMessageId = ticket.messages[ticket.messages.length - 1].id || 0;
@@ -263,7 +233,7 @@
                 `;
             }
         } catch (error) {
-            logDebug('Erreur chargement messages: ' + error.message);
+            console.error('Erreur chargement messages:', error);
         }
     }
 
@@ -286,7 +256,6 @@
             const div = document.createElement('div');
             div.className = `message ${isUser ? 'user' : ''}`;
 
-            // ✅ CORRECTION : Utiliser getMessageText() pour éviter null
             const messageText = getMessageText(msg);
 
             div.innerHTML = `
@@ -316,7 +285,7 @@
             const lastMsg = ticket.messages[ticket.messages.length - 1];
             if (lastMsg.id > lastMessageId) {
                 const newMessages = ticket.messages.filter(msg => msg.id > lastMessageId);
-                logDebug('📨 Nouveaux messages reçus: ' + newMessages.length);
+                console.log('📨 Nouveaux messages:', newMessages.length);
 
                 const emptyMsg = chatMessages.querySelector('.text-secondary');
                 if (emptyMsg && chatMessages.children.length === 1) {
@@ -343,10 +312,11 @@
                 lastMessageId = lastMsg.id;
             }
         } catch (error) {
-            logDebug('Erreur polling: ' + error.message);
+            console.error('Erreur polling:', error);
         }
     }
 
+    // ✅ CORRECTION : Utiliser "message" au lieu de "content"
     async function sendMessage() {
         const message = messageInput.value.trim();
         if (!message) {
@@ -362,8 +332,9 @@
         const userType = userTypeSelect.value;
         const userName = userType === 'CLIENT' ? 'Client' : 'Chauffeur';
 
+        // ✅ CHANGEMENT ICI : Utiliser "message" au lieu de "content"
         const messageRequest = {
-            content: message,
+            message: message,  // ← Changé de "content" à "message"
             senderId: userId,
             senderType: 'USER',
             senderName: userName,
@@ -371,28 +342,26 @@
         };
 
         try {
-            logDebug('📤 Envoi du message: ' + JSON.stringify(messageRequest));
+            console.log('📤 Envoi du message:', messageRequest);
 
             const response = await fetch(`${API_BASE_URL}/tickets/${defaultTicketId}/messages`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(messageRequest)
             });
 
             if (response.ok) {
                 const result = await response.json();
-                logDebug('✅ Message envoyé avec succès: ' + JSON.stringify(result));
+                console.log('✅ Message envoyé avec succès:', result);
                 messageInput.value = '';
                 await loadMessages();
             } else {
                 const errorText = await response.text();
-                logDebug('❌ Erreur envoi message: ' + errorText);
+                console.error('❌ Erreur envoi message:', errorText);
                 alert('Erreur lors de l\'envoi du message: ' + errorText);
             }
         } catch (error) {
-            logDebug('❌ Erreur envoi message: ' + error.message);
+            console.error('❌ Erreur envoi message:', error);
             alert('Erreur de connexion: ' + error.message);
         }
     }
@@ -404,19 +373,15 @@
 
     // ✅ Initialisation
     async function init() {
-        logDebug('🚀 Initialisation du chat...');
-        logDebug('👤 ID Utilisateur: ' + userId);
+        console.log('🚀 Initialisation du chat...');
 
         try {
             const hasExisting = await getExistingTickets();
-
             if (!hasExisting) {
                 await createTicket();
             }
         } catch (error) {
-            logDebug('❌ Erreur initialisation: ' + error.message);
-            ticketIdDisplay.textContent = '❌ Erreur - Rechargez';
-            ticketIdDisplay.className = 'ticket-id error';
+            console.error('❌ Erreur initialisation:', error);
         }
     }
 
