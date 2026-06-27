@@ -370,4 +370,27 @@ public class TicketService {
         response.setCreatedAt(message.getCreatedAt());
         return response;
     }
+
+    @Transactional
+    public void deleteTicket(Long id) {
+        ticketRepository.deleteById(id);
+    }
+
+    @Transactional
+    public TicketResponse updateTicketPriority(Long id, String priority) {
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Ticket non trouvé"));
+        ticket.setPriority(priority);
+        ticket.setUpdatedAt(LocalDateTime.now());
+        return mapToResponse(ticketRepository.save(ticket));
+    }
+
+    @Transactional
+    public TicketResponse updateTicketStatusSimple(Long id, String status) {
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Ticket non trouvé"));
+        ticket.setStatus(status);
+        ticket.setUpdatedAt(LocalDateTime.now());
+        return mapToResponse(ticketRepository.save(ticket));
+    }
 }

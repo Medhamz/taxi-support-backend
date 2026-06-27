@@ -267,6 +267,7 @@ function loadTicketsPage() {
     loadTicketListTable();
 }
 
+// ==================== TABLEAU DES TICKETS AVEC ACTIONS ====================
 async function loadTicketListTable() {
     try {
         const status = document.getElementById('filterStatus')?.value;
@@ -282,6 +283,7 @@ async function loadTicketListTable() {
             return;
         }
 
+        // ✅ TABLEAU AVEC MENUS DÉROULANTS ET BOUTONS D'ACTION
         container.innerHTML = `
             <table class="table">
                 <thead>
@@ -303,12 +305,30 @@ async function loadTicketListTable() {
                             <td>${ticket.subject || 'Sans sujet'}</td>
                             <td>${ticket.userName || 'Anonyme'}</td>
                             <td>${ticket.category || 'GENERAL'}</td>
-                            <td><span class="badge badge-${ticket.status?.toLowerCase()}">${getStatusLabel(ticket.status)}</span></td>
-                            <td><span class="badge ${ticket.priority === 'URGENT' ? 'badge-urgent' : ticket.priority === 'HIGH' ? 'badge-high' : ticket.priority === 'MEDIUM' ? 'badge-medium' : 'badge-low'}">${ticket.priority || 'MEDIUM'}</span></td>
+                            <td>
+                                <select class="form-select form-select-sm status-select" data-ticket-id="${ticket.id}" style="background:#141833; color:#fff; border-color:rgba(255,255,255,0.1);">
+                                    <option value="OPEN" ${ticket.status === 'OPEN' ? 'selected' : ''}>Ouvert</option>
+                                    <option value="IN_PROGRESS" ${ticket.status === 'IN_PROGRESS' ? 'selected' : ''}>En cours</option>
+                                    <option value="WAITING" ${ticket.status === 'WAITING' ? 'selected' : ''}>En attente</option>
+                                    <option value="RESOLVED" ${ticket.status === 'RESOLVED' ? 'selected' : ''}>Résolu</option>
+                                    <option value="CLOSED" ${ticket.status === 'CLOSED' ? 'selected' : ''}>Fermé</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm priority-select" data-ticket-id="${ticket.id}" style="background:#141833; color:#fff; border-color:rgba(255,255,255,0.1);">
+                                    <option value="LOW" ${ticket.priority === 'LOW' ? 'selected' : ''}>Basse</option>
+                                    <option value="MEDIUM" ${ticket.priority === 'MEDIUM' ? 'selected' : ''}>Moyenne</option>
+                                    <option value="HIGH" ${ticket.priority === 'HIGH' ? 'selected' : ''}>Haute</option>
+                                    <option value="URGENT" ${ticket.priority === 'URGENT' ? 'selected' : ''}>Urgent</option>
+                                </select>
+                            </td>
                             <td>${new Date(ticket.createdAt).toLocaleDateString()}</td>
                             <td>
-                                <button class="btn btn-sm btn-primary" onclick="openTicket(${ticket.id})">
+                                <button class="btn btn-sm btn-success me-1" onclick="openTicket(${ticket.id})" title="Voir les messages">
                                     <i class="fas fa-comment"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteTicket(${ticket.id})" title="Supprimer">
+                                    <i class="fas fa-trash"></i>
                                 </button>
                             </td>
                         </tr>
@@ -316,10 +336,165 @@ async function loadTicketListTable() {
                 </tbody>
             </table>
         `;
+
+        // ✅ Écouteurs pour les changements de statut
+        document.querySelectorAll('.status-select').forEach(select => {
+            select.addEventListener('change', function() {
+                const ticketId = this.dataset.ticketId;
+                const newStatus = this.value;
+                updateTicketStatus(ticketId, newStatus);
+            });
+        });
+
+        // ✅ Écouteurs pour les changements de priorité
+        document.querySelectorAll('.priority-select').forEach(select => {
+            select.addEventListener('change', function() {
+                const ticketId = this.dataset.ticketId;
+                const newPriority = this.value;
+                updateTicketPriority(ticketId, newPriority);
+            });
+        });
+
     } catch (error) {
         console.error('Erreur chargement tickets:', error);
     }
 }
+
+// ==================== GESTION DES TICKETS ====================
+
+/**
+ * Supprimer un ticket
+ */
+async function deleteTicket(ticketId) {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce ticket ? Cette action est irréversible.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            showNotification('Ticket supprimé avec succès', 'success');
+            loadTicketListTable();
+            loadStats();
+        } else {
+            const errorText = await response.text();
+            showNotification('Erreur lors de la suppression: ' + errorText, 'danger');
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion lors de la suppression', 'danger');
+    }
+}
+
+/**
+ * Mettre à jour le statut d'un ticket
+ */
+async function updateTicketStatus(ticketId, status) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/status-simple?status=${status}`, {
+            method: 'PATCH'
+        });
+
+        if (response.ok) {
+            showNotification(`Statut mis à jour vers ${getStatusLabel(status)}`, 'success');
+            loadTicketListTable();
+            loadStats();
+            // Mettre à jour l'affichage du badge si on est sur le dashboard
+            loadUrgentTickets();
+        } else {
+            const errorText = await response.text();
+            showNotification('Erreur lors de la mise à jour du statut: ' + errorText, 'danger');
+            loadTicketListTable(); // Recharger pour annuler le changement visuel
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion lors de la mise à jour', 'danger');
+        loadTicketListTable();
+    }
+}
+
+/**
+ * Mettre à jour la priorité d'un ticket
+ */
+async function updateTicketPriority(ticketId, priority) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/priority?priority=${priority}`, {
+            method: 'PATCH'
+        });
+
+        if (response.ok) {
+            showNotification(`Priorité mise à jour vers ${priority}`, 'success');
+            loadTicketListTable();
+            loadUrgentTickets();
+        } else {
+            const errorText = await response.text();
+            showNotification('Erreur lors de la mise à jour de la priorité: ' + errorText, 'danger');
+            loadTicketListTable();
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion lors de la mise à jour', 'danger');
+        loadTicketListTable();
+    }
+}
+
+/**
+ * Afficher une notification
+ */
+function showNotification(message, type = 'info') {
+    const colors = {
+        'success': '#2ED573',
+        'danger': '#FF4757',
+        'warning': '#FFA502',
+        'info': '#6C63FF'
+    };
+
+    // Créer l'élément de notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #141833;
+        color: #fff;
+        padding: 15px 25px;
+        border-radius: 10px;
+        border-left: 4px solid ${colors[type] || '#6C63FF'};
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        z-index: 9999;
+        max-width: 400px;
+        animation: slideIn 0.3s ease;
+        font-size: 14px;
+    `;
+    notification.innerHTML = message;
+
+    // Ajouter au DOM
+    document.body.appendChild(notification);
+
+    // Supprimer après 3 secondes
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Ajouter le style pour l'animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+`;
+document.head.appendChild(style);
 
 function applyFilters() {
     loadTicketListTable();
@@ -526,7 +701,7 @@ async function checkNewMessages(ticketId) {
     }
 }
 
-// ==================== ENVOYER UN MESSAGE (CORRIGÉ) ====================
+// ==================== ENVOYER UN MESSAGE ====================
 async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
@@ -537,9 +712,8 @@ async function sendMessage() {
     }
 
     try {
-        // ✅ CORRECTION : Utiliser le bon endpoint et le bon champ
         const messageRequest = {
-            message: message,  // ← Changé de "content" à "message"
+            message: message,
             senderId: 999,
             senderType: 'AGENT',
             senderName: 'Admin Support',
@@ -548,7 +722,6 @@ async function sendMessage() {
 
         console.log('📤 Envoi du message:', messageRequest);
 
-        // ✅ CORRECTION : URL correcte
         const response = await fetch(`${API_BASE_URL}/tickets/${currentTicketId}/messages`, {
             method: 'POST',
             headers: {
@@ -561,7 +734,6 @@ async function sendMessage() {
             const result = await response.json();
             console.log('✅ Message envoyé:', result);
             input.value = '';
-            // Recharger les messages
             await loadTicketMessages(currentTicketId);
         } else {
             const errorText = await response.text();
@@ -598,6 +770,7 @@ function loadSettingsPage() {
 function refreshDashboard() {
     loadStats();
     loadUrgentTickets();
+    loadTicketListTable();
 }
 
 function refreshMessages() {
@@ -615,7 +788,7 @@ function filterTickets(query) {
     });
 }
 
-// Exposé globalement
+// ==================== EXPOSITION GLOBALE ====================
 window.loadPage = loadPage;
 window.selectTicket = selectTicket;
 window.sendMessage = sendMessage;
@@ -625,6 +798,9 @@ window.filterTickets = filterTickets;
 window.openTicket = openTicket;
 window.applyFilters = applyFilters;
 window.loadTicketsPage = loadTicketsPage;
+window.deleteTicket = deleteTicket;
+window.updateTicketStatus = updateTicketStatus;
+window.updateTicketPriority = updateTicketPriority;
 
 // Nettoyer le polling quand on quitte la page
 window.addEventListener('beforeunload', function() {

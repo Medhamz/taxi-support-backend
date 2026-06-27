@@ -108,4 +108,35 @@ public class TicketController {
     public ResponseEntity<List<TicketResponse>> getUrgentTickets() {
         return ResponseEntity.ok(ticketService.getUrgentTickets());
     }
+
+    // ==================== NOUVEAUX ENDPOINTS POUR LA GESTION DES TICKETS ====================
+
+    /**
+     * Supprimer un ticket
+     */
+    @DeleteMapping("/tickets/{id}")
+    public ResponseEntity<Void> deleteTicket(@PathVariable Long id) {
+        ticketService.deleteTicket(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Changer la priorité d'un ticket
+     */
+    @PatchMapping("/tickets/{id}/priority")
+    public ResponseEntity<TicketResponse> updateTicketPriority(
+            @PathVariable Long id,
+            @RequestParam String priority) {
+        return ResponseEntity.ok(ticketService.updateTicketPriority(id, priority));
+    }
+
+    /**
+     * Changer le statut d'un ticket (version simplifiée avec String)
+     */
+    @PatchMapping("/tickets/{id}/status-simple")
+    public ResponseEntity<TicketResponse> updateTicketStatusSimple(
+            @PathVariable Long id,
+            @RequestParam String status) {
+        return ResponseEntity.ok(ticketService.updateTicketStatusSimple(id, status));
+    }
 }
