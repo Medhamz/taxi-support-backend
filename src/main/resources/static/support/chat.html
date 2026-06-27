@@ -24,8 +24,12 @@
         .status { text-align: center; margin-top: 10px; font-size: 14px; }
         .status.online { color: #2ED573; }
         .status.offline { color: #FF4757; }
-        .user-info { background: rgba(108,99,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .user-info { background: rgba(108,99,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         .user-info select { padding: 8px; border-radius: 8px; background: #141833; color: #fff; border: 1px solid rgba(255,255,255,0.1); }
+        .user-info input { padding: 8px; border-radius: 8px; background: #141833; color: #fff; border: 1px solid rgba(255,255,255,0.1); flex: 1; min-width: 150px; }
+        .ticket-id { color: #6C63FF; font-weight: bold; }
+        .loading { color: #FFA502; }
+        .error { color: #FF4757; }
     </style>
 </head>
 <body>
@@ -33,6 +37,7 @@
     <div class="chat-header">
         <h2><i class="fas fa-headset"></i> Support Client</h2>
         <p class="text-secondary">Une question ? Un problème ? Nous sommes là pour vous aider !</p>
+        <div class="ticket-id" id="ticketIdDisplay">🔄 Création du ticket...</div>
     </div>
 
     <div class="user-info">
@@ -45,6 +50,12 @@
                 <option value="CLIENT">👤 Client</option>
                 <option value="DRIVER">🚖 Chauffeur</option>
             </select>
+        </div>
+        <div>
+            <input type="email" id="userEmailInput" placeholder="Email (optionnel)" class="form-control-sm">
+        </div>
+        <div>
+            <input type="text" id="userPhoneInput" placeholder="Téléphone (optionnel)" class="form-control-sm">
         </div>
     </div>
 
@@ -65,35 +76,165 @@
 
 <script>
     const API_BASE_URL = 'https://taxi-support-backend.onrender.com/api/support';
-    let userId = Math.floor(Math.random() * 10000);
-    let defaultTicketId = 1;
+
+    // ✅ Générer un ID utilisateur valide (entre 1000 et 999999)
+    let userId = Math.floor(Math.random() * 999000) + 1000;
+    let defaultTicketId = null;
     let pollingInterval = null;
     let lastMessageId = 0;
+    let isCreatingTicket = false;
 
     const chatMessages = document.getElementById('chatMessages');
     const messageInput = document.getElementById('messageInput');
     const statusEl = document.getElementById('connectionStatus');
     const userTypeSelect = document.getElementById('userTypeSelect');
     const userNameDisplay = document.getElementById('userNameDisplay');
+    const ticketIdDisplay = document.getElementById('ticketIdDisplay');
+    const userEmailInput = document.getElementById('userEmailInput');
+    const userPhoneInput = document.getElementById('userPhoneInput');
+
+    console.log('👤 ID Utilisateur:', userId);
+
+    // ✅ Créer un ticket avec l'API existante
+    async function createTicket() {
+        if (isCreatingTicket) return;
+        isCreatingTicket = true;
+
+        try {
+            const userType = userTypeSelect.value;
+            const userName = userType === 'CLIENT' ? 'Client' : 'Chauffeur';
+            const userEmail = userEmailInput.value.trim() || null;
+            const userPhone = userPhoneInput.value.trim() || null;
+
+            console.log('🆕 Création d\'un nouveau ticket...');
+            ticketIdDisplay.textContent = '⏳ Création en cours...';
+            ticketIdDisplay.className = 'ticket-id loading';
+
+            const ticketRequest = {
+                userId: userId,  // ✅ REQUIS - ID utilisateur valide
+                userType: userType,
+                userName: userName,
+                userEmail: userEmail,
+                userPhone: userPhone,
+                category: 'GENERAL',
+                subject: 'Support Client - Demande d\'assistance',
+                description: 'Bonjour, j\'ai besoin d\'aide avec l\'application.',
+                priority: 'MEDIUM'
+            };
+
+            console.log('📤 Envoi de la requête:', JSON.stringify(ticketRequest, null, 2));
+
+            const response = await fetch(`${API_BASE_URL}/tickets`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(ticketRequest)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Erreur création ticket:', errorText);
+                throw new Error('Erreur création ticket: ' + response.status + ' - ' + errorText);
+            }
+
+            const newTicket = await response.json();
+            defaultTicketId = newTicket.id;
+            console.log('✅ Ticket créé avec ID:', defaultTicketId);
+            ticketIdDisplay.textContent = `✅ Ticket #${defaultTicketId}`;
+            ticketIdDisplay.className = 'ticket-id';
+
+            // Démarrer le polling après création
+            startPolling();
+
+            // Envoyer le premier message automatiquement
+            const firstMessage = document.getElementById('messageInput').value.trim();
+            if (firstMessage) {
+                await sendMessage();
+            }
+
+        } catch (error) {
+            console.error('❌ Erreur createTicket:', error);
+            ticketIdDisplay.textContent = '❌ Erreur - Rechargez la page';
+            ticketIdDisplay.className = 'ticket-id error';
+            statusEl.className = 'status offline';
+            statusEl.innerHTML = '🔴 Erreur: ' + error.message;
+        } finally {
+            isCreatingTicket = false;
+        }
+    }
+
+    // ✅ Récupérer les tickets existants pour cet utilisateur
+    async function getExistingTickets() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/tickets/user/${userId}`);
+
+            if (!response.ok) {
+                console.log('Aucun ticket existant pour cet utilisateur');
+                return false;
+            }
+
+            const tickets = await response.json();
+
+            if (tickets && tickets.length > 0) {
+                // Utiliser le premier ticket existant
+                defaultTicketId = tickets[0].id;
+                console.log('✅ Ticket existant trouvé:', defaultTicketId);
+                ticketIdDisplay.textContent = `Ticket #${defaultTicketId}`;
+                ticketIdDisplay.className = 'ticket-id';
+                startPolling();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Erreur récupération tickets:', error);
+            return false;
+        }
+    }
 
     // Démarrer le polling
     function startPolling() {
         if (pollingInterval) {
             clearInterval(pollingInterval);
         }
-        pollingInterval = setInterval(checkNewMessages, 2000);
-        // Premier chargement
         loadMessages();
+        pollingInterval = setInterval(checkNewMessages, 2000);
+        console.log('🔄 Polling démarré pour le ticket', defaultTicketId);
     }
 
     async function loadMessages() {
+        if (!defaultTicketId) {
+            console.log('⏳ En attente du ticket...');
+            return;
+        }
+
         try {
+            console.log('📥 Chargement des messages pour le ticket', defaultTicketId);
             const response = await fetch(`${API_BASE_URL}/tickets/${defaultTicketId}`);
+
+            if (!response.ok) {
+                console.error('Erreur chargement messages:', response.status);
+                return;
+            }
+
             const ticket = await response.json();
+            console.log('📥 Ticket reçu:', ticket);
 
             if (ticket.messages && ticket.messages.length > 0) {
                 lastMessageId = ticket.messages[ticket.messages.length - 1].id || 0;
                 displayMessages(ticket.messages);
+            } else {
+                // Afficher un message d'accueil
+                const container = chatMessages;
+                const welcomeMsg = container.querySelector('.text-secondary');
+                if (!welcomeMsg) {
+                    container.innerHTML = `
+                        <div class="text-center text-secondary py-5">
+                            <i class="fas fa-comment-dots fa-3x mb-3 d-block opacity-25"></i>
+                            <p>Soyez le premier à envoyer un message !</p>
+                        </div>
+                    `;
+                }
             }
         } catch (error) {
             console.error('Erreur chargement messages:', error);
@@ -101,10 +242,20 @@
     }
 
     function displayMessages(messages) {
-        // Supprimer les anciens messages sauf le message de bienvenue
-        const welcomeMsg = chatMessages.querySelector('.text-secondary');
-        chatMessages.innerHTML = '';
-        if (welcomeMsg) chatMessages.appendChild(welcomeMsg);
+        const container = chatMessages;
+
+        // Supprimer tous les enfants
+        container.innerHTML = '';
+
+        if (!messages || messages.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-secondary py-5">
+                    <i class="fas fa-comment-dots fa-3x mb-3 d-block opacity-25"></i>
+                    <p>Soyez le premier à envoyer un message !</p>
+                </div>
+            `;
+            return;
+        }
 
         messages.forEach(msg => {
             const isUser = msg.senderType === 'USER';
@@ -117,19 +268,19 @@
                     <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
                 </div>
             `;
-            chatMessages.appendChild(div);
+            container.appendChild(div);
         });
 
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        // Supprimer le message de bienvenue
-        const welcome = chatMessages.querySelector('.text-secondary');
-        if (welcome) welcome.remove();
+        container.scrollTop = container.scrollHeight;
     }
 
     async function checkNewMessages() {
+        if (!defaultTicketId) return;
+
         try {
             const response = await fetch(`${API_BASE_URL}/tickets/${defaultTicketId}`);
+            if (!response.ok) return;
+
             const ticket = await response.json();
 
             if (!ticket.messages || ticket.messages.length === 0) return;
@@ -137,6 +288,14 @@
             const lastMsg = ticket.messages[ticket.messages.length - 1];
             if (lastMsg.id > lastMessageId) {
                 const newMessages = ticket.messages.filter(msg => msg.id > lastMessageId);
+                console.log('📨 Nouveaux messages reçus:', newMessages.length);
+
+                // Supprimer le message "Pas de messages" s'il existe
+                const emptyMsg = chatMessages.querySelector('.text-secondary');
+                if (emptyMsg && chatMessages.children.length === 1) {
+                    chatMessages.innerHTML = '';
+                }
+
                 newMessages.forEach(msg => {
                     const isUser = msg.senderType === 'USER';
                     const div = document.createElement('div');
@@ -160,40 +319,51 @@
 
     async function sendMessage() {
         const message = messageInput.value.trim();
-        if (!message) return;
+        if (!message) {
+            alert('Veuillez écrire un message');
+            return;
+        }
+
+        if (!defaultTicketId) {
+            alert('Attendez la création du ticket...');
+            return;
+        }
 
         const userType = userTypeSelect.value;
         const userName = userType === 'CLIENT' ? 'Client' : 'Chauffeur';
 
-        const chatMessage = {
-            ticketId: defaultTicketId,
+        const messageRequest = {
+            content: message,
             senderId: userId,
             senderType: 'USER',
             senderName: userName,
-            content: message,
             messageType: 'TEXT'
         };
 
         try {
-            const response = await fetch(`${API_BASE_URL}/messages`, {
+            console.log('📤 Envoi du message:', messageRequest);
+
+            const response = await fetch(`${API_BASE_URL}/tickets/${defaultTicketId}/messages`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(chatMessage)
+                body: JSON.stringify(messageRequest)
             });
 
             if (response.ok) {
                 messageInput.value = '';
                 // Recharger les messages
                 await loadMessages();
+                console.log('✅ Message envoyé avec succès');
             } else {
-                console.error('Erreur envoi message:', await response.text());
-                alert('Erreur lors de l\'envoi du message');
+                const errorText = await response.text();
+                console.error('❌ Erreur envoi message:', errorText);
+                alert('Erreur lors de l\'envoi du message: ' + errorText);
             }
         } catch (error) {
-            console.error('Erreur envoi message:', error);
-            alert('Erreur de connexion');
+            console.error('❌ Erreur envoi message:', error);
+            alert('Erreur de connexion: ' + error.message);
         }
     }
 
@@ -201,6 +371,26 @@
         const labels = { 'CLIENT': 'Client', 'DRIVER': 'Chauffeur' };
         userNameDisplay.textContent = labels[this.value] || 'Client';
     });
+
+    // ✅ Initialisation
+    async function init() {
+        console.log('🚀 Initialisation du chat...');
+        console.log('👤 ID Utilisateur:', userId);
+
+        try {
+            // Essayer de récupérer un ticket existant
+            const hasExisting = await getExistingTickets();
+
+            if (!hasExisting) {
+                // Créer un nouveau ticket
+                await createTicket();
+            }
+        } catch (error) {
+            console.error('❌ Erreur initialisation:', error);
+            ticketIdDisplay.textContent = '❌ Erreur - Rechargez';
+            ticketIdDisplay.className = 'ticket-id error';
+        }
+    }
 
     // Nettoyer le polling
     window.addEventListener('beforeunload', function() {
@@ -210,7 +400,7 @@
     });
 
     // Démarrer
-    startPolling();
+    init();
 </script>
 </body>
 </html>
