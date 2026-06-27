@@ -19,6 +19,7 @@
         .message .time { font-size: 11px; color: #a0aec0; margin-top: 4px; }
         .input-group { display: flex; gap: 10px; }
         .input-group input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #fff; }
+        .input-group input::placeholder { color: #6c757d; }
         .input-group button { padding: 12px 30px; border-radius: 10px; background: #6C63FF; border: none; color: #fff; font-weight: 600; }
         .input-group button:hover { background: #5a52d5; }
         .status { text-align: center; margin-top: 10px; font-size: 14px; }
@@ -27,9 +28,11 @@
         .user-info { background: rgba(108,99,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         .user-info select { padding: 8px; border-radius: 8px; background: #141833; color: #fff; border: 1px solid rgba(255,255,255,0.1); }
         .user-info input { padding: 8px; border-radius: 8px; background: #141833; color: #fff; border: 1px solid rgba(255,255,255,0.1); flex: 1; min-width: 150px; }
+        .user-info input::placeholder { color: #6c757d; }
         .ticket-id { color: #6C63FF; font-weight: bold; }
         .loading { color: #FFA502; }
         .error { color: #FF4757; }
+        .small-text { font-size: 12px; color: #6c757d; }
     </style>
 </head>
 <body>
@@ -72,6 +75,7 @@
     </div>
 
     <div class="status" id="connectionStatus">🟢 Connecté</div>
+    <div class="small-text text-center mt-2">Ticket #<span id="ticketNumberDisplay">-</span></div>
 </div>
 
 <script>
@@ -90,10 +94,23 @@
     const userTypeSelect = document.getElementById('userTypeSelect');
     const userNameDisplay = document.getElementById('userNameDisplay');
     const ticketIdDisplay = document.getElementById('ticketIdDisplay');
+    const ticketNumberDisplay = document.getElementById('ticketNumberDisplay');
     const userEmailInput = document.getElementById('userEmailInput');
     const userPhoneInput = document.getElementById('userPhoneInput');
 
     console.log('👤 ID Utilisateur:', userId);
+
+    // ✅ Fonction pour obtenir le texte du message (évite les null)
+    function getMessageText(msg) {
+        // Priorité: message > content > texte par défaut
+        if (msg.message && msg.message !== 'null' && msg.message !== 'undefined') {
+            return msg.message;
+        }
+        if (msg.content && msg.content !== 'null' && msg.content !== 'undefined') {
+            return msg.content;
+        }
+        return 'Message';
+    }
 
     // ✅ Créer un ticket avec l'API existante
     async function createTicket() {
@@ -111,7 +128,7 @@
             ticketIdDisplay.className = 'ticket-id loading';
 
             const ticketRequest = {
-                userId: userId,  // ✅ REQUIS - ID utilisateur valide
+                userId: userId,
                 userType: userType,
                 userName: userName,
                 userEmail: userEmail,
@@ -143,15 +160,10 @@
             console.log('✅ Ticket créé avec ID:', defaultTicketId);
             ticketIdDisplay.textContent = `✅ Ticket #${defaultTicketId}`;
             ticketIdDisplay.className = 'ticket-id';
+            ticketNumberDisplay.textContent = defaultTicketId;
 
             // Démarrer le polling après création
             startPolling();
-
-            // Envoyer le premier message automatiquement
-            const firstMessage = document.getElementById('messageInput').value.trim();
-            if (firstMessage) {
-                await sendMessage();
-            }
 
         } catch (error) {
             console.error('❌ Erreur createTicket:', error);
@@ -182,6 +194,7 @@
                 console.log('✅ Ticket existant trouvé:', defaultTicketId);
                 ticketIdDisplay.textContent = `Ticket #${defaultTicketId}`;
                 ticketIdDisplay.className = 'ticket-id';
+                ticketNumberDisplay.textContent = defaultTicketId;
                 startPolling();
                 return true;
             }
@@ -225,16 +238,12 @@
                 displayMessages(ticket.messages);
             } else {
                 // Afficher un message d'accueil
-                const container = chatMessages;
-                const welcomeMsg = container.querySelector('.text-secondary');
-                if (!welcomeMsg) {
-                    container.innerHTML = `
-                        <div class="text-center text-secondary py-5">
-                            <i class="fas fa-comment-dots fa-3x mb-3 d-block opacity-25"></i>
-                            <p>Soyez le premier à envoyer un message !</p>
-                        </div>
-                    `;
-                }
+                chatMessages.innerHTML = `
+                    <div class="text-center text-secondary py-5">
+                        <i class="fas fa-comment-dots fa-3x mb-3 d-block opacity-25"></i>
+                        <p>Soyez le premier à envoyer un message !</p>
+                    </div>
+                `;
             }
         } catch (error) {
             console.error('Erreur chargement messages:', error);
@@ -243,8 +252,6 @@
 
     function displayMessages(messages) {
         const container = chatMessages;
-
-        // Supprimer tous les enfants
         container.innerHTML = '';
 
         if (!messages || messages.length === 0) {
@@ -261,10 +268,14 @@
             const isUser = msg.senderType === 'USER';
             const div = document.createElement('div');
             div.className = `message ${isUser ? 'user' : ''}`;
+
+            // ✅ CORRECTION : Utiliser getMessageText() pour éviter null
+            const messageText = getMessageText(msg);
+
             div.innerHTML = `
                 <div class="bubble">
                     ${!isUser ? `<small class="text-warning d-block mb-1">${msg.senderName || 'Agent Support'}</small>` : ''}
-                    <p class="mb-0">${msg.content || msg.message}</p>
+                    <p class="mb-0">${messageText}</p>
                     <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
                 </div>
             `;
@@ -300,10 +311,14 @@
                     const isUser = msg.senderType === 'USER';
                     const div = document.createElement('div');
                     div.className = `message ${isUser ? 'user' : ''}`;
+
+                    // ✅ CORRECTION : Utiliser getMessageText() pour éviter null
+                    const messageText = getMessageText(msg);
+
                     div.innerHTML = `
                         <div class="bubble">
                             ${!isUser ? `<small class="text-warning d-block mb-1">${msg.senderName || 'Agent Support'}</small>` : ''}
-                            <p class="mb-0">${msg.content || msg.message}</p>
+                            <p class="mb-0">${messageText}</p>
                             <div class="time">${new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div>
                         </div>
                     `;
